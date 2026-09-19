@@ -1,0 +1,30 @@
+# Dependencies and local build output
+node_modules/
+.pnpm-store/
+dist/
+build/
+coverage/
+.turbo/
+.cache/
+
+# Local environments and secrets
+.env
+.env.*
+!.env.example
+Docker/compose/.env
+
+# Git worktrees created for isolated feature development
+.worktrees/
+worktrees/
+
+# Test and tool output
+playwright-report/
+test-results/
+*.log
+.eslintcache
+.vite/
+
+# OS and editor files
+.DS_Store
+.idea/
+.vscode/settings.json
