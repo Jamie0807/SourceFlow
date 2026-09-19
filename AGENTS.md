@@ -186,7 +186,7 @@ CI 失败必须阻断合并；若确需豁免，必须记录原因、责任人�
 提交格式：
 
 ```text
-<type>(<scope>): <中文简述>
+<type>(<scope>): <English summary>
 ```
 
 允许的 `type`：`feat`、`fix`、`docs`、`refactor`、`test`、`chore`、`build`、`ci`、`perf`、`revert`。
@@ -194,9 +194,9 @@ CI 失败必须阻断合并；若确需豁免，必须记录原因、责任人�
 示例：
 
 ```text
-feat(content): 增加内容批次生成流程
-test(domain): 补充额度扣减边界用例
-ci(tooling): 增加 Playwright smoke 门禁
+feat(content): add content batch generation flow
+test(domain): cover quota deduction boundaries
+ci(tooling): add Playwright smoke gate
 ```
 
 规则：
