@@ -12,6 +12,7 @@
     "Fastify",
     "NestJS",
     "Prisma",
-    "BullMQ"
+    "BullMQ",
+    "wechat"
   ]
 }

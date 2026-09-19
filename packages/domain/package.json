@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:unit": "vitest run --config ../../vitest.config.ts"
+    "test:unit": "vitest run --root ../.. --config ../../vitest.config.ts"
   }
 }
