@@ -9,11 +9,12 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-sourceflow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
-      - sourceflow-postgres-data:/var/lib/postgresql/data
+      - sourceflow-postgres-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sourceflow} -d ${POSTGRES_DB:-sourceflow}"]
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-sourceflow} -d ${POSTGRES_DB:-sourceflow}']
       interval: 5s
       timeout: 5s
       retries: 20
@@ -21,13 +22,40 @@ services:
   redis:
     image: ${REDIS_IMAGE:-redis:latest}
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    command:
+      [
+        'redis-server',
+        '--appendonly',
+        'yes',
+        '--requirepass',
+        '${REDIS_PASSWORD:?REDIS_PASSWORD is required}',
+      ]
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - '${REDIS_PORT:-6379}:6379'
     volumes:
       - sourceflow-redis-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      test: ['CMD-SHELL', 'redis-cli -a "$${REDIS_PASSWORD}" ping | grep PONG']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    image: quay.io/minio/minio:latest
+    restart: unless-stopped
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    ports:
+      - '${MINIO_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - sourceflow-minio-data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl --fail --silent http://localhost:9000/minio/health/live || exit 1']
       interval: 5s
       timeout: 5s
       retries: 20
@@ -35,3 +63,4 @@ services:
 volumes:
   sourceflow-postgres-data:
   sourceflow-redis-data:
+  sourceflow-minio-data:
