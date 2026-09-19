@@ -6,6 +6,7 @@ build/
 coverage/
 .turbo/
 .cache/
+*.tsbuildinfo
 
 # Local environments and secrets
 .env

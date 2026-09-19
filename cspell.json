@@ -1,0 +1,17 @@
+{
+  "version": "0.2",
+  "language": "en,en-GB",
+  "files": ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
+  "ignorePaths": ["node_modules", "dist", "coverage", "pnpm-lock.yaml"],
+  "words": [
+    "SourceFlow",
+    "monorepo",
+    "pnpm",
+    "Vitest",
+    "Playwright",
+    "Fastify",
+    "NestJS",
+    "Prisma",
+    "BullMQ"
+  ]
+}

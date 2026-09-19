@@ -1,0 +1,3 @@
+corepack pnpm lint
+corepack pnpm typecheck
+corepack pnpm test:unit -- --run

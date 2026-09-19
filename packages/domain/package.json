@@ -1,0 +1,8 @@
+{
+  "name": "@sourceflow/domain",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:unit": "vitest run --config ../../vitest.config.ts"
+  }
+}

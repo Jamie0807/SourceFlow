@@ -9,12 +9,12 @@
 
 - **依赖：** 无
 - **Worktree：** `chore/sourceflow-foundation`
-- **文件：** `package.json`、`pnpm-workspace.yaml`、`tsconfig.base.json`、`eslint.config.js`、`prettier.config.cjs`、`cspell.json`、`vitest.workspace.ts`、`playwright.config.ts`
-- [ ] 创建 `apps/web`、`apps/api`、`apps/worker` 和 `packages/*` 包清单。
-- [ ] 固定 packageManager 版本并生成 lockfile。
-- [ ] 配置 `lint`、`format:check`、`spellcheck`、`typecheck`、`test:unit`、`test:component`、`test:integration`、构建脚本。
-- [ ] 配置 ESLint、Prettier、Spellcheck、Vitest 和 Playwright。
-- [ ] 验证 `pnpm install --frozen-lockfile`、`pnpm lint`、`pnpm typecheck`、`pnpm test:unit -- --run`。
+- **文件：** `package.json`、`pnpm-workspace.yaml`、`tsconfig.base.json`、`eslint.config.js`、`prettier.config.cjs`、`cspell.json`、`vitest.config.ts`、`playwright.config.ts`
+- [x] 创建 `apps/web`、`apps/api`、`apps/worker` 和 `packages/*` 包清单。
+- [x] 固定 packageManager 版本并生成 lockfile。
+- [x] 配置 `lint`、`format:check`、`spellcheck`、`typecheck`、`test:unit`、`test:component`、`test:integration`、构建脚本。
+- [x] 配置 ESLint、Prettier、Spellcheck、Vitest 和 Playwright。
+- [x] 验证 `pnpm install --frozen-lockfile`、`pnpm lint`、`pnpm typecheck`、`pnpm test:unit -- --run`。
 
 ### T002 配置 Husky、Commitlint 和 Commitizen
 
