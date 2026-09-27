@@ -1,0 +1,376 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  owner
+  editor
+  reviewer
+}
+
+enum SourceStatus {
+  created
+  uploading
+  uploaded
+  queued
+  processing
+  succeeded
+  failed
+  cancelled
+}
+
+enum ContentBatchStatus {
+  draft
+  generating
+  needs_review
+  approved
+  exportable
+  exported
+  generation_failed
+  export_failed
+  cancelled
+}
+
+enum AssetStatus {
+  draft
+  needs_review
+  needs_changes
+  approved
+  exported
+}
+
+enum ReviewStatus {
+  needs_review
+  needs_changes
+  approved
+  rejected
+}
+
+enum ExportJobStatus {
+  queued
+  processing
+  succeeded
+  failed
+  cancelled
+}
+
+enum TaskRunStatus {
+  queued
+  processing
+  succeeded
+  failed
+  cancelled
+}
+
+enum Platform {
+  douyin
+  xiaohongshu
+  wechat_channels
+  bilibili
+  weibo
+  kuaishou
+  youtube
+  instagram
+  tiktok
+  facebook
+  linkedin
+  x
+}
+
+enum AssetType {
+  short_video
+  image_post
+  text_post
+  carousel
+  live_script
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String?
+  displayName  String?
+  isTestData   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspaceMemberships WorkspaceMember[] @relation("WorkspaceMemberUser")
+  uploadedSources      Source[]          @relation("SourceUploader")
+  createdBatches       ContentBatch[]    @relation("ContentBatchCreator")
+  createdAssetVersions AssetVersion[]    @relation("AssetVersionCreator")
+  reviewActions        ReviewAction[]    @relation("ReviewActionActor")
+  exportJobs           ExportJob[]       @relation("ExportJobRequester")
+}
+
+model Workspace {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  isTestData  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members            WorkspaceMember[]
+  brands             Brand[]
+  sources            Source[]
+  transcriptSegments TranscriptSegment[]
+  contentInsights    ContentInsight[]
+  contentBatches     ContentBatch[]
+  assets             Asset[]
+  assetVersions      AssetVersion[]
+  reviewActions      ReviewAction[]
+  exportJobs         ExportJob[]
+  taskRuns           TaskRun[]
+}
+
+model WorkspaceMember {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        UserRole @default(editor)
+  isTestData  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  user      User      @relation("WorkspaceMemberUser", fields: [userId], references: [id])
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+}
+
+model Brand {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  isTestData  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  sources   Source[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+model Source {
+  id              String       @id @default(uuid())
+  workspaceId     String
+  uploadedById    String
+  brandId         String?
+  fileName        String
+  mimeType        String
+  sizeBytes       BigInt
+  durationSeconds Int?
+  contentHash     String
+  storageKey      String
+  status          SourceStatus @default(created)
+  deletedAt       DateTime?
+  isTestData      Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id])
+  uploadedBy         User                @relation("SourceUploader", fields: [uploadedById], references: [id])
+  brand              Brand?              @relation(fields: [brandId], references: [id])
+  transcriptSegments TranscriptSegment[]
+  contentInsights    ContentInsight[]
+  contentBatches     ContentBatch[]
+
+  @@unique([workspaceId, contentHash])
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+}
+
+model TranscriptSegment {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  sourceId     String
+  segmentIndex Int
+  startMs      Int
+  endMs        Int
+  text         String
+  speaker      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  source    Source    @relation(fields: [sourceId], references: [id])
+
+  @@unique([sourceId, segmentIndex])
+  @@index([workspaceId])
+  @@index([workspaceId, sourceId])
+}
+
+model ContentInsight {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  sourceId         String
+  sourceVersion    Int      @default(1)
+  provider         String
+  model            String
+  requestVersion   String
+  providerMetadata Json
+  chapters         Json
+  keyPoints        Json
+  quotes           Json
+  candidateClips   Json
+  riskFlags        Json
+  assetReferences  Json
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  source    Source    @relation(fields: [sourceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([workspaceId, sourceId])
+}
+
+model ContentBatch {
+  id              String             @id @default(uuid())
+  workspaceId     String
+  sourceId        String?
+  createdById     String
+  title           String
+  status          ContentBatchStatus @default(draft)
+  targetPlatforms Json
+  idempotencyKey  String             @default(uuid())
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id])
+  source     Source?     @relation(fields: [sourceId], references: [id])
+  createdBy  User        @relation("ContentBatchCreator", fields: [createdById], references: [id])
+  assets     Asset[]
+  exportJobs ExportJob[]
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+}
+
+model Asset {
+  id                   String      @id @default(uuid())
+  workspaceId          String
+  contentBatchId       String
+  platform             Platform
+  assetType            AssetType
+  status               AssetStatus @default(draft)
+  currentVersionNumber Int         @default(1)
+  title                String?
+  body                 String?
+  tags                 Json
+  cta                  String?
+  mediaReferences      Json
+  sourceReferences     Json
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id])
+  contentBatch  ContentBatch   @relation(fields: [contentBatchId], references: [id])
+  versions      AssetVersion[]
+  reviewActions ReviewAction[]
+
+  @@unique([contentBatchId, platform, assetType])
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+}
+
+model AssetVersion {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  assetId          String
+  versionNumber    Int
+  createdById      String
+  title            String?
+  body             String?
+  tags             Json
+  cta              String?
+  mediaReferences  Json
+  sourceReferences Json
+  changeSummary    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  asset     Asset     @relation(fields: [assetId], references: [id])
+  createdBy User      @relation("AssetVersionCreator", fields: [createdById], references: [id])
+
+  @@unique([assetId, versionNumber])
+  @@index([workspaceId])
+  @@index([workspaceId, assetId])
+}
+
+model ReviewAction {
+  id            String       @id @default(uuid())
+  workspaceId   String
+  assetId       String
+  actorId       String
+  versionNumber Int
+  fromStatus    ReviewStatus
+  toStatus      ReviewStatus
+  action        String
+  reason        String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  asset     Asset     @relation(fields: [assetId], references: [id])
+  actor     User      @relation("ReviewActionActor", fields: [actorId], references: [id])
+
+  @@index([workspaceId])
+  @@index([workspaceId, assetId])
+}
+
+model ExportJob {
+  id               String          @id @default(uuid())
+  workspaceId      String
+  contentBatchId   String
+  requestedById    String
+  status           ExportJobStatus @default(queued)
+  idempotencyKey   String
+  outputStorageKey String?
+  errorCode        String?
+  errorMessage     String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id])
+  contentBatch ContentBatch @relation(fields: [contentBatchId], references: [id])
+  requestedBy  User         @relation("ExportJobRequester", fields: [requestedById], references: [id])
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+}
+
+model TaskRun {
+  id             String        @id @default(uuid())
+  workspaceId    String
+  taskType       String
+  idempotencyKey String
+  status         TaskRunStatus @default(queued)
+  attempt        Int           @default(0)
+  payload        Json
+  result         Json?
+  errorCode      String?
+  errorMessage   String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+}
