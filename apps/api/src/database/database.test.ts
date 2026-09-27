@@ -1,0 +1,277 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { assertMigrationPreflight } from './migration-preflight.js';
+import { assertDatabaseConfigured } from './prisma.service.js';
+
+const worktreeRoot = resolve(import.meta.dirname, '../../../..');
+const schemaPath = resolve(worktreeRoot, 'prisma/schema.prisma');
+const seedPath = resolve(worktreeRoot, 'prisma/seed.ts');
+const readinessPath = resolve(import.meta.dirname, './database-health.ts');
+
+const requiredModels = [
+  'User',
+  'Workspace',
+  'WorkspaceMember',
+  'Brand',
+  'Source',
+  'TranscriptSegment',
+  'ContentInsight',
+  'ContentBatch',
+  'Asset',
+  'AssetVersion',
+  'ReviewAction',
+  'ExportJob',
+  'TaskRun',
+] as const;
+
+function readModel(schema: string, modelName: string): string {
+  const match = schema.match(new RegExp(`model ${modelName} \\{([\\s\\S]*?)\\n\\}`));
+  return match?.[1] ?? '';
+}
+
+describe('Prisma database contract', () => {
+  it('defines exactly the requested entities with timestamps and tenant indexes', () => {
+    expect(existsSync(schemaPath)).toBe(true);
+    if (!existsSync(schemaPath)) return;
+
+    const schema = readFileSync(schemaPath, 'utf8');
+    const modelNames = [...schema.matchAll(/^model (\w+) \{/gm)].map((match) => match[1]);
+
+    expect(modelNames).toEqual(requiredModels);
+
+    for (const modelName of requiredModels) {
+      const model = readModel(schema, modelName);
+      expect(model, `${modelName} should have an id`).toMatch(/\bid\s+String\s+@id/);
+      expect(model, `${modelName} should have createdAt`).toMatch(/\bcreatedAt\s+DateTime/);
+      expect(model, `${modelName} should have updatedAt`).toMatch(/\bupdatedAt\s+DateTime/);
+    }
+
+    for (const modelName of requiredModels.filter(
+      (name) => name !== 'User' && name !== 'Workspace',
+    )) {
+      const model = readModel(schema, modelName);
+      expect(model, `${modelName} should be tenant-owned`).toMatch(/\bworkspaceId\s+String/);
+      expect(model, `${modelName} should index workspaceId`).toMatch(/@@index\(\[workspaceId\]/);
+    }
+
+    expect(schema).toMatch(/email\s+String\s+@unique/);
+    expect(schema).toMatch(/@@unique\(\[workspaceId, userId\]\)/);
+    expect(schema).toMatch(/@@unique\(\[workspaceId, contentHash\]\)/);
+    expect(schema).toMatch(/@@unique\(\[workspaceId, idempotencyKey\]\)/);
+    expect(schema).toMatch(/@@unique\(\[assetId, versionNumber\]\)/);
+    expect(schema).toMatch(/providerMetadata\s+Json/);
+    expect(schema).toMatch(/sourceReferences\s+Json/);
+    expect(schema).toMatch(/assetReferences\s+Json/);
+  });
+
+  it('matches product states for source, batch, asset, review, export, and task records', () => {
+    expect(existsSync(schemaPath)).toBe(true);
+    if (!existsSync(schemaPath)) return;
+
+    const schema = readFileSync(schemaPath, 'utf8');
+    expect(schema).toMatch(/enum SourceStatus \{[\s\S]*created[\s\S]*cancelled[\s\S]*\}/);
+    expect(schema).toMatch(
+      /enum ContentBatchStatus \{[\s\S]*generation_failed[\s\S]*export_failed[\s\S]*\}/,
+    );
+    expect(schema).toMatch(/enum AssetStatus \{[\s\S]*needs_changes[\s\S]*exported[\s\S]*\}/);
+    expect(schema).toMatch(/enum ReviewStatus \{[\s\S]*needs_review[\s\S]*approved[\s\S]*\}/);
+    expect(schema).toMatch(/enum ExportJobStatus \{[\s\S]*processing[\s\S]*cancelled[\s\S]*\}/);
+    expect(schema).toMatch(/enum TaskRunStatus \{[\s\S]*processing[\s\S]*cancelled[\s\S]*\}/);
+  });
+});
+
+describe('database readiness', () => {
+  it('fails safely when DATABASE_URL is missing without querying or exposing config', async () => {
+    expect(existsSync(readinessPath)).toBe(true);
+    if (!existsSync(readinessPath)) return;
+
+    const readiness = (await import(pathToFileURL(readinessPath).href)) as {
+      checkDatabaseReadiness: (
+        client: { $queryRaw: (...args: unknown[]) => Promise<unknown> },
+        env?: NodeJS.ProcessEnv,
+      ) => Promise<{ status: string; reason?: string }>;
+    };
+    let queryCount = 0;
+    const client = {
+      $queryRaw: async (...args: unknown[]) => {
+        void args;
+        queryCount += 1;
+      },
+    };
+
+    const result = await readiness.checkDatabaseReadiness(client, {});
+
+    expect(result).toEqual({ status: 'not_configured', reason: 'DATABASE_URL_MISSING' });
+    expect(queryCount).toBe(0);
+    expect(JSON.stringify(result)).not.toMatch(/password|secret|postgresql:\/\//i);
+  });
+
+  it('returns a safe unavailable status when the database ping fails', async () => {
+    expect(existsSync(readinessPath)).toBe(true);
+    if (!existsSync(readinessPath)) return;
+
+    const readiness = (await import(pathToFileURL(readinessPath).href)) as {
+      checkDatabaseReadiness: (
+        client: { $queryRaw: (...args: unknown[]) => Promise<unknown> },
+        env?: NodeJS.ProcessEnv,
+      ) => Promise<{ status: string; reason?: string }>;
+    };
+    const client = {
+      $queryRaw: async (...args: unknown[]) => {
+        void args;
+        throw new Error('postgresql://user:secret@example.test/db');
+      },
+    };
+
+    const result = await readiness.checkDatabaseReadiness(client, {
+      DATABASE_URL: 'postgresql://user:secret@example.test/db',
+    });
+
+    expect(result).toEqual({ status: 'unavailable', reason: 'DATABASE_UNREACHABLE' });
+    expect(JSON.stringify(result)).not.toMatch(/secret|postgresql:\/\//i);
+  });
+});
+
+describe('test seed safety', () => {
+  it('refuses production before touching the database', async () => {
+    expect(existsSync(seedPath)).toBe(true);
+    if (!existsSync(seedPath)) return;
+
+    const seed = (await import(pathToFileURL(seedPath).href)) as {
+      assertSeedEnvironment: (env: NodeJS.ProcessEnv) => void;
+    };
+
+    expect(() => seed.assertSeedEnvironment({ NODE_ENV: 'production' })).toThrow(
+      'Refusing to run Prisma seed in production',
+    );
+    expect(() => seed.assertSeedEnvironment({ NODE_ENV: 'development' })).toThrow(
+      'Refusing to run Prisma seed without ALLOW_TEST_SEED=true',
+    );
+  });
+
+  it('uses marked writes so running the seed twice remains idempotent', async () => {
+    expect(existsSync(seedPath)).toBe(true);
+    if (!existsSync(seedPath)) return;
+
+    const seed = (await import(pathToFileURL(seedPath).href)) as {
+      seedTestData: (client: unknown, env: NodeJS.ProcessEnv) => Promise<void>;
+    };
+    const calls: Array<{ model: string; data: Record<string, unknown> }> = [];
+    const upsert = (model: string) => async (args: { create: Record<string, unknown> }) => {
+      calls.push({ model, data: args.create });
+      return { id: `${model}-id` };
+    };
+    const client = {
+      user: { upsert: upsert('user') },
+      workspace: { upsert: upsert('workspace') },
+      workspaceMember: { upsert: upsert('workspaceMember') },
+      brand: { upsert: upsert('brand') },
+    };
+
+    await seed.seedTestData(client, { NODE_ENV: 'test' });
+    await seed.seedTestData(client, { NODE_ENV: 'test' });
+
+    expect(calls).toHaveLength(8);
+    expect(calls.every(({ data }) => data.isTestData === true)).toBe(true);
+    expect(calls.map(({ model }) => model)).toEqual([
+      'user',
+      'workspace',
+      'workspaceMember',
+      'brand',
+      'user',
+      'workspace',
+      'workspaceMember',
+      'brand',
+    ]);
+  });
+
+  it('does not overwrite an existing non-test user', async () => {
+    const seed = (await import(pathToFileURL(seedPath).href)) as {
+      seedTestData: (client: unknown, env: NodeJS.ProcessEnv) => Promise<void>;
+    };
+    let upsertCalled = false;
+    const model = {
+      findUnique: async () => ({ id: 'existing-user', isTestData: false }),
+      upsert: async () => {
+        upsertCalled = true;
+        return { id: 'unexpected' };
+      },
+    };
+    const client = {
+      user: model,
+      workspace: { upsert: async () => ({ id: 'workspace-id' }) },
+      workspaceMember: { upsert: async () => ({ id: 'member-id' }) },
+      brand: { upsert: async () => ({ id: 'brand-id' }) },
+    };
+
+    await expect(seed.seedTestData(client, { NODE_ENV: 'test' })).rejects.toThrow(
+      'Refusing to overwrite non-test user',
+    );
+    expect(upsertCalled).toBe(false);
+  });
+});
+
+describe('migration safety', () => {
+  it('requires a database URL before migration execution', () => {
+    expect(() =>
+      assertMigrationPreflight({
+        command: 'deploy',
+        pendingMigrations: 1,
+        backupConfirmed: true,
+        env: {},
+      }),
+    ).toThrow('DATABASE_URL is required before running a migration');
+  });
+
+  it('requires a confirmed backup before production migration or rollback', () => {
+    expect(() =>
+      assertMigrationPreflight({
+        command: 'deploy',
+        pendingMigrations: 1,
+        backupConfirmed: false,
+        isProduction: true,
+        env: { DATABASE_URL: 'postgresql://localhost/sourceflow' },
+      }),
+    ).toThrow('Production migration requires backup confirmation');
+
+    expect(() =>
+      assertMigrationPreflight({
+        command: 'rollback',
+        pendingMigrations: 0,
+        backupConfirmed: false,
+        env: { DATABASE_URL: 'postgresql://localhost/sourceflow' },
+      }),
+    ).toThrow('Rollback requires backup confirmation');
+  });
+
+  it('allows a reviewed production migration and rollback', () => {
+    expect(() =>
+      assertMigrationPreflight({
+        command: 'deploy',
+        pendingMigrations: 1,
+        backupConfirmed: true,
+        isProduction: true,
+        env: { DATABASE_URL: 'postgresql://localhost/sourceflow' },
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      assertMigrationPreflight({
+        command: 'rollback',
+        pendingMigrations: 0,
+        backupConfirmed: true,
+        env: { DATABASE_URL: 'postgresql://localhost/sourceflow' },
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe('API database startup', () => {
+  it('fails startup when database configuration is missing', () => {
+    expect(() => assertDatabaseConfigured({})).toThrow(
+      'DATABASE_URL is required before starting the API',
+    );
+  });
+});

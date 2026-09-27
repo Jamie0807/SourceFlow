@@ -24,6 +24,25 @@ docker compose --env-file Docker/compose/.env -f Docker/compose/docker-compose.y
 
 当前 Compose 启动 PostgreSQL、Redis 和 MinIO 基础服务。MinIO S3 API 默认访问地址为 `http://localhost:9000`，管理控制台默认访问地址为 `http://localhost:9001`。API、Worker、Web 服务在应用源码接入后使用对应镜像加入生产 Compose。
 
+## 4. API 镜像与 Prisma
+
+API 镜像会在构建阶段复制 `prisma/`、安装 Prisma Client 并生成客户端：
+
+```bash
+docker build -f Docker/build/api.Dockerfile -t sourceflow-api:local .
+```
+
+数据库命令从仓库根目录执行。迁移和 Seed 必须显式提供数据库连接；Seed 还必须显式设置 `ALLOW_TEST_SEED=true`，生产环境会被拒绝：
+
+```bash
+set -a
+source Docker/compose/.env.example
+set +a
+corepack pnpm db:validate
+corepack pnpm db:migrate:deploy
+ALLOW_TEST_SEED=true NODE_ENV=development corepack pnpm db:seed
+```
+
 MinIO 使用 `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD` 配置本地管理员账号；端口分别由 `MINIO_PORT` 和 `MINIO_CONSOLE_PORT` 配置。`.env.example` 中的凭证仅用于本机开发，不能复用到共享或生产环境。
 
 ## 3. 镜像原则

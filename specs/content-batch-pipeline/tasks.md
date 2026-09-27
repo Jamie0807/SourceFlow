@@ -42,11 +42,11 @@
 
 - **依赖：** T003
 - **文件：** `prisma/schema.prisma`、`prisma/seed.ts`、`apps/api/src/database/*`
-- [ ] 创建 User、Workspace、WorkspaceMember、Brand、Source、TranscriptSegment、ContentInsight、ContentBatch、Asset、AssetVersion、ReviewAction、ExportJob、TaskRun。
-- [ ] 为租户实体增加 `workspace_id` 和索引。
-- [ ] 为 task idempotency key、source hash 和用户邮箱增加约束。
-- [ ] 编写迁移执行和回滚前检查。
-- [ ] 验证 seed 只创建测试数据。
+- [x] 创建 User、Workspace、WorkspaceMember、Brand、Source、TranscriptSegment、ContentInsight、ContentBatch、Asset、AssetVersion、ReviewAction、ExportJob、TaskRun。
+- [x] 为租户实体增加 `workspace_id` 和索引。
+- [x] 为 task idempotency key、source hash 和用户邮箱增加约束。
+- [x] 编写迁移执行和回滚前检查。
+- [x] 验证 seed 只创建测试数据。
 
 ### T005 实现领域状态机和验证器
 
