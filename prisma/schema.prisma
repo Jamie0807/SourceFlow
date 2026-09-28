@@ -105,6 +105,7 @@ model User {
   createdAssetVersions AssetVersion[]    @relation("AssetVersionCreator")
   reviewActions        ReviewAction[]    @relation("ReviewActionActor")
   exportJobs           ExportJob[]       @relation("ExportJobRequester")
+  refreshSessions      RefreshSession[]
 }
 
 model Workspace {
@@ -127,6 +128,31 @@ model Workspace {
   reviewActions      ReviewAction[]
   exportJobs         ExportJob[]
   taskRuns           TaskRun[]
+  refreshSessions    RefreshSession[]
+}
+
+model RefreshSession {
+  id               String    @id @default(uuid())
+  userId           String
+  workspaceId      String
+  tokenHash        String    @unique
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  replacedById     String?   @unique
+  familyId         String
+  revocationReason String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user       User            @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workspace  Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  replacedBy RefreshSession? @relation("RefreshSessionReplacement", fields: [replacedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  replaces   RefreshSession? @relation("RefreshSessionReplacement")
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([familyId])
+  @@index([userId, workspaceId, revokedAt, expiresAt])
 }
 
 model WorkspaceMember {

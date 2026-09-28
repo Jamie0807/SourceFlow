@@ -66,18 +66,19 @@
 - **依赖：** T004、T005
 - **Worktree：** `feat/content-batch-auth`
 - **文件：** `apps/api/src/auth/*`、`apps/api/src/common/*`、`apps/api/src/auth/*.test.ts`
-- [ ] 先写注册、错误密码、重复邮箱、过期 token 和刷新轮换失败测试。
-- [ ] 实现 Access Token + Refresh Token。
-- [ ] Web 设置 HttpOnly Cookie；错误不泄漏邮箱存在性。
-- [ ] 实现 logout 撤销 refresh token。
-- [ ] 实现 Owner、Editor、Reviewer 守卫。
+- [x] 先写注册、错误密码、重复邮箱、过期 token 和刷新轮换失败测试。
+- [x] 实现 Access Token + Refresh Token。
+- [x] Web 设置 HttpOnly Cookie；登录错误不泄漏邮箱存在性，注册重复邮箱按产品契约返回明确错误。
+- [x] 实现 logout 撤销 refresh token。
+- [x] 实现 Owner、Editor、Reviewer 守卫；守卫只信任实时成员上下文。
 
 ### T007 实现工作区和租户权限
 
 - **依赖：** T006
 - **文件：** `apps/api/src/workspaces/*`、`apps/api/src/common/tenant-context.ts`
-- [ ] 创建默认 Workspace 和 Brand。
+- [ ] 使用 T006 注册事务创建的默认 Workspace 和 Brand，不重复创建。
 - [ ] 实现成员邀请和角色查询。
+- [ ] 实现 Tenant Membership Guard，从数据库读取当前成员角色；JWT 中的 workspace/role 只作请求提示。
 - [ ] 为每个资源查询增加 workspace 归属校验。
 - [ ] 写 A workspace 访问 B workspace 的越权测试。
 
@@ -180,6 +181,8 @@
 - [ ] 实现登录、工作区、上传、内容批次、资产编辑和审核页面。
 - [ ] 统一使用 `getByRole`、`getByLabel` 和 `getByTestId` 可测试定位。
 - [ ] 覆盖 360px、1280px 和 1440px 关键布局。
+
+> 2026-09-28：`specs/content-batch-web` 仅完成 T017 的首屏子集（登录演示页 + 静态工作台首页）。真实认证接线、API Client、上传、生成、编辑和审核页面仍未完成，T017 不得因此标记为完成。
 
 ### T018 建立 React Testing Library 组件回归
 
