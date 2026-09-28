@@ -6,5 +6,8 @@ export default defineConfig({
     passWithNoTests: true,
     include: ['packages/**/*.test.ts', 'apps/**/*.test.ts'],
     exclude: ['node_modules', 'dist', 'coverage'],
+    coverage: {
+      exclude: ['**/node_modules/**', '**/dist/**', '**/coverage/**'],
+    },
   },
 });

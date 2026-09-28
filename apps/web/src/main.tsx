@@ -1,9 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-function App() {
-  return <main>SourceFlow</main>;
-}
+import { App } from './App';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -7,12 +7,14 @@ import { assertDatabaseConfigured } from './prisma.service.js';
 
 const worktreeRoot = resolve(import.meta.dirname, '../../../..');
 const schemaPath = resolve(worktreeRoot, 'prisma/schema.prisma');
+const refreshSessionMigrationPath = resolve(
+  worktreeRoot,
+  'prisma/migrations/20260928_add_refresh_sessions/migration.sql',
+);
 const seedPath = resolve(worktreeRoot, 'prisma/seed.ts');
 const readinessPath = resolve(import.meta.dirname, './database-health.ts');
 
-const requiredModels = [
-  'User',
-  'Workspace',
+const tenantBusinessModels = [
   'WorkspaceMember',
   'Brand',
   'Source',
@@ -26,20 +28,22 @@ const requiredModels = [
   'TaskRun',
 ] as const;
 
+const requiredModels = ['User', 'Workspace', ...tenantBusinessModels, 'RefreshSession'] as const;
+
 function readModel(schema: string, modelName: string): string {
   const match = schema.match(new RegExp(`model ${modelName} \\{([\\s\\S]*?)\\n\\}`));
   return match?.[1] ?? '';
 }
 
 describe('Prisma database contract', () => {
-  it('defines exactly the requested entities with timestamps and tenant indexes', () => {
+  it('defines the required business and authentication infrastructure models', () => {
     expect(existsSync(schemaPath)).toBe(true);
     if (!existsSync(schemaPath)) return;
 
     const schema = readFileSync(schemaPath, 'utf8');
     const modelNames = [...schema.matchAll(/^model (\w+) \{/gm)].map((match) => match[1]);
 
-    expect(modelNames).toEqual(requiredModels);
+    expect(modelNames).toEqual(expect.arrayContaining([...requiredModels]));
 
     for (const modelName of requiredModels) {
       const model = readModel(schema, modelName);
@@ -48,13 +52,30 @@ describe('Prisma database contract', () => {
       expect(model, `${modelName} should have updatedAt`).toMatch(/\bupdatedAt\s+DateTime/);
     }
 
-    for (const modelName of requiredModels.filter(
-      (name) => name !== 'User' && name !== 'Workspace',
-    )) {
+    for (const modelName of tenantBusinessModels) {
       const model = readModel(schema, modelName);
       expect(model, `${modelName} should be tenant-owned`).toMatch(/\bworkspaceId\s+String/);
       expect(model, `${modelName} should index workspaceId`).toMatch(/@@index\(\[workspaceId\]/);
     }
+
+    const refreshSession = readModel(schema, 'RefreshSession');
+    expect(refreshSession).toMatch(/\buserId\s+String/);
+    expect(refreshSession).toMatch(/\bworkspaceId\s+String/);
+    expect(refreshSession).toMatch(/\btokenHash\s+String\s+@unique/);
+    expect(refreshSession).toMatch(/\bexpiresAt\s+DateTime/);
+    expect(refreshSession).toMatch(/\brevokedAt\s+DateTime\?/);
+    expect(refreshSession).toMatch(/\breplacedById\s+String\?/);
+    expect(refreshSession).toMatch(/\bfamilyId\s+String/);
+    expect(refreshSession).toMatch(/\brevocationReason\s+String\?/);
+    expect(refreshSession).toMatch(/@@index\(\[userId\]\)/);
+    expect(refreshSession).toMatch(/@@index\(\[workspaceId\]\)/);
+    expect(refreshSession).toMatch(/@@index\(\[familyId\]\)/);
+    expect(refreshSession).toMatch(/@@index\(\[userId, workspaceId, revokedAt, expiresAt\]\)/);
+
+    const user = readModel(schema, 'User');
+    const workspace = readModel(schema, 'Workspace');
+    expect(user).toMatch(/\brefreshSessions\s+RefreshSession\[\]/);
+    expect(workspace).toMatch(/\brefreshSessions\s+RefreshSession\[\]/);
 
     expect(schema).toMatch(/email\s+String\s+@unique/);
     expect(schema).toMatch(/@@unique\(\[workspaceId, userId\]\)/);
@@ -64,6 +85,51 @@ describe('Prisma database contract', () => {
     expect(schema).toMatch(/providerMetadata\s+Json/);
     expect(schema).toMatch(/sourceReferences\s+Json/);
     expect(schema).toMatch(/assetReferences\s+Json/);
+  });
+
+  it('migrates refresh sessions with safe foreign keys, uniqueness, and lookup indexes', () => {
+    expect(existsSync(refreshSessionMigrationPath)).toBe(true);
+    if (!existsSync(refreshSessionMigrationPath)) return;
+
+    const migration = readFileSync(refreshSessionMigrationPath, 'utf8');
+    expect(migration).toMatch(/CREATE TABLE "RefreshSession"/);
+    expect(migration).toMatch(/"userId" TEXT NOT NULL/);
+    expect(migration).toMatch(/"workspaceId" TEXT NOT NULL/);
+    expect(migration).toMatch(/"tokenHash" TEXT NOT NULL/);
+    expect(migration).toMatch(/"expiresAt" TIMESTAMP\(3\) NOT NULL/);
+    expect(migration).toMatch(/"revokedAt" TIMESTAMP\(3\)/);
+    expect(migration).toMatch(/"replacedById" TEXT/);
+    expect(migration).toMatch(/"familyId" TEXT NOT NULL/);
+    expect(migration).toMatch(/"revocationReason" TEXT/);
+    expect(migration).toMatch(/"createdAt" TIMESTAMP\(3\) NOT NULL DEFAULT CURRENT_TIMESTAMP/);
+    expect(migration).toMatch(/"updatedAt" TIMESTAMP\(3\) NOT NULL/);
+    expect(migration).toMatch(
+      /CREATE UNIQUE INDEX "RefreshSession_tokenHash_key" ON "RefreshSession"\("tokenHash"\)/,
+    );
+    expect(migration).toMatch(
+      /CREATE UNIQUE INDEX "RefreshSession_replacedById_key" ON "RefreshSession"\("replacedById"\)/,
+    );
+    expect(migration).toMatch(
+      /CREATE INDEX "RefreshSession_userId_idx" ON "RefreshSession"\("userId"\)/,
+    );
+    expect(migration).toMatch(
+      /CREATE INDEX "RefreshSession_workspaceId_idx" ON "RefreshSession"\("workspaceId"\)/,
+    );
+    expect(migration).toMatch(
+      /CREATE INDEX "RefreshSession_familyId_idx" ON "RefreshSession"\("familyId"\)/,
+    );
+    expect(migration).toMatch(
+      /CREATE INDEX "RefreshSession_userId_workspaceId_revokedAt_expiresAt_idx" ON "RefreshSession"\("userId", "workspaceId", "revokedAt", "expiresAt"\)/,
+    );
+    expect(migration).toMatch(
+      /FOREIGN KEY \("userId"\) REFERENCES "User"\("id"\) ON DELETE RESTRICT ON UPDATE CASCADE/,
+    );
+    expect(migration).toMatch(
+      /FOREIGN KEY \("workspaceId"\) REFERENCES "Workspace"\("id"\) ON DELETE RESTRICT ON UPDATE CASCADE/,
+    );
+    expect(migration).toMatch(
+      /FOREIGN KEY \("replacedById"\) REFERENCES "RefreshSession"\("id"\) ON DELETE SET NULL ON UPDATE CASCADE/,
+    );
   });
 
   it('matches product states for source, batch, asset, review, export, and task records', () => {
