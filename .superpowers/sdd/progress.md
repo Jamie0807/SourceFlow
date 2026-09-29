@@ -46,6 +46,22 @@
 - `pnpm typecheck`、`pnpm lint`、`pnpm build:api`、`pnpm format:check`、`pnpm spellcheck`、`git diff --check` 通过。
 - 本地 MinIO smoke：使用 `S3Client` 指向 `http://localhost:9000`、bucket `sourceflow-local`，执行上传、下载内容校验、删除和删除后 not-found，均通过；凭证来自 `Docker/compose/.env.example`，测试对象已删除。
 
+## T002 工程提交与质量 Hook 执行进度
+
+- [x] 保留 `pnpm commit` → Commitizen → `cz-git` 链路，并通过 `cz.config.cjs` 固化项目允许的 Conventional Commits 类型。
+- [x] Commitlint 限制类型、大小写、标题长度和非空 subject；关闭 subject 大小写限制以兼容中文提交说明。
+- [x] pre-commit 执行 lint-staged、typecheck 和无 coverage 的 quick unit；commit-msg 执行 Commitlint；pre-push 调用集中式 `verify:push` 门禁。
+- [x] 扩展 lint-staged 到 JavaScript、TypeScript、CJS/MJS/CTS/MTS、JSON、YAML、Markdown 和 CSS；JS/TS/TSX 执行 ESLint，配置类文件执行 Prettier；增加 T002 命令级 Vitest 验收。
+
+验收记录（2026-09-29）：
+
+- `corepack pnpm exec vitest run scripts/t002-hooks.test.ts --config vitest.config.ts`：3/3 通过，包含真实 `commit-msg` Hook 错误/正确退出码验证。
+- `pnpm commit` 交互验证显示 `feat: 新增功能`、`fix: 修复问题`、`docs: 更新文档` 等中文类型选项；随后取消交互，未产生提交。
+- Commitlint 验证：`style(tooling): 不允许的提交类型` 失败；`feat(auth): 支持中文提交说明` 通过。
+- `corepack pnpm test:unit:quick -- --run`：23 个测试文件、145 个测试通过、9 个集成测试跳过。
+- 暂存 `cz.config.cjs` 执行 `corepack pnpm exec lint-staged --concurrent=false`：CJS 文件由 Prettier 处理并返回 0，随后取消暂存。
+- `corepack pnpm verify:push`：lint、format、spellcheck、typecheck、unit（145 passed、9 skipped）、component（4 passed）、integration smoke、Web/API/Worker build 和 Docker Compose config 全部通过。
+
 ## T017 首屏子集执行记录
 
 - [x] 固化 `specs/content-batch-web` 需求、计划、任务和检查清单。

@@ -1,1 +1,3 @@
 corepack pnpm exec lint-staged
+corepack pnpm typecheck
+corepack pnpm test:unit:quick -- --run

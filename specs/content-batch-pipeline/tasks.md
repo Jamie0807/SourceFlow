@@ -19,12 +19,14 @@
 ### T002 配置 Husky、Commitlint 和 Commitizen
 
 - **依赖：** T001
-- **文件：** `.husky/pre-commit`、`.husky/pre-push`、`commitlint.config.cjs`、`package.json`
-- [ ] 配置 `pnpm commit` 使用 Commitizen。
-- [ ] 配置 Conventional Commits 类型和中文提交说明兼容性。
-- [ ] pre-commit 只执行 lint-staged、类型检查和快速单元测试。
-- [ ] pre-push 执行质量门禁，不执行自动 commit。
-- [ ] 用错误提交类型和正确提交类型各验证一次。
+- **文件：** `.husky/pre-commit`、`.husky/commit-msg`、`.husky/pre-push`、`.lintstagedrc.json`、`commitlint.config.cjs`、`cz.config.cjs`、`package.json`
+- [x] 配置 `pnpm commit` 使用 Commitizen。
+- [x] 配置 Conventional Commits 类型和中文提交说明兼容性。
+- [x] pre-commit 只执行 lint-staged、类型检查和快速单元测试。
+- [x] pre-push 执行质量门禁，不执行自动 commit。
+- [x] 用错误提交类型和正确提交类型各验证一次。
+
+> 2026-09-29：T002 已在隔离 Worktree 完成。`pnpm commit` 交互验证加载 `cz.config.cjs` 的中文类型列表；Commitlint 和真实 `commit-msg` Hook 对 `style(tooling): 不允许的提交类型` 返回失败，对 `feat(auth): 支持中文提交说明` 返回通过。pre-commit 依次执行 lint-staged、typecheck、无 coverage 的 quick unit；pre-push 调用 `verify:push`，Hook 中不包含自动 commit/push。
 
 ## 阶段 1：基础设施与领域
 
