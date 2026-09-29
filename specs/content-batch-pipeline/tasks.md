@@ -76,11 +76,13 @@
 
 - **依赖：** T006
 - **文件：** `apps/api/src/workspaces/*`、`apps/api/src/common/tenant-context.ts`
-- [ ] 使用 T006 注册事务创建的默认 Workspace 和 Brand，不重复创建。
-- [ ] 实现成员邀请和角色查询。
-- [ ] 实现 Tenant Membership Guard，从数据库读取当前成员角色；JWT 中的 workspace/role 只作请求提示。
+- [x] 使用 T006 注册事务创建的默认 Workspace 和 Brand，不重复创建。
+- [x] 实现成员邀请和角色查询。
+- [x] 实现 Tenant Membership Guard，从数据库读取当前成员角色；JWT 中的 workspace/role 只作请求提示。
 - [ ] 为每个资源查询增加 workspace 归属校验。
-- [ ] 写 A workspace 访问 B workspace 的越权测试。
+- [x] 写 A workspace 访问 B workspace 的越权测试。
+
+> T007 已完成当前 Workspace、成员邀请、活跃 Workspace 切换和租户守卫范围的实现与 PostgreSQL 验收。资源级归属校验保留到后续资源 API 任务；当前仓库尚不存在可接入的资源 HTTP API。
 
 ### T008 实现 Storage Adapter
 

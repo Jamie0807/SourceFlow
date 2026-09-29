@@ -2,7 +2,7 @@ import { Catch, type ArgumentsHost, type ExceptionFilter, HttpException } from '
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 
-import { isAuthError } from '../auth/auth.errors.js';
+import { isAuthError, isWorkspaceError, WorkspaceError } from '../auth/auth.errors.js';
 
 type ErrorResponse = Readonly<{
   code: string;
@@ -17,17 +17,29 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<FastifyReply>();
     const request = host.switchToHttp().getRequest<FastifyRequest & { id?: string }>();
     const payload = toSafeErrorResponse(exception, request.id ?? randomUUID());
-    const status = isAuthError(exception)
-      ? exception.status
-      : exception instanceof HttpException
-        ? exception.getStatus()
-        : 500;
+    const status = getStatus(exception);
 
     response.status(status).send(payload);
   }
 }
 
+function getStatus(exception: unknown): number {
+  if (isWorkspaceError(exception)) return exception.status;
+  if (isAuthError(exception)) return exception.status;
+  if (exception instanceof HttpException) return exception.getStatus();
+  return 500;
+}
+
 function toSafeErrorResponse(exception: unknown, requestId: string): ErrorResponse {
+  if (isWorkspaceError(exception)) {
+    return {
+      code: exception.code,
+      message: new WorkspaceError(exception.code).message,
+      request_id: requestId,
+      details: null,
+    };
+  }
+
   if (isAuthError(exception)) {
     return {
       code: exception.code,

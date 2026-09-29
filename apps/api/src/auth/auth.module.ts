@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AuthController } from './auth.controller.js';
 import { AUTH_REPOSITORY } from './auth.repository.js';
 import { AuthService } from './auth.service.js';
+import { TenantMembershipGuard } from '../common/tenant-context.js';
 import { PasswordHasher } from './crypto/password-hasher.js';
 import { PrismaAuthRepository } from './prisma-auth.repository.js';
 import { AccessTokenGuard } from './guards/access-token.guard.js';
@@ -21,8 +22,9 @@ import { AuthTokenService } from './tokens/auth-token.service.js';
     PrismaAuthRepository,
     AccessTokenGuard,
     RoleGuard,
+    TenantMembershipGuard,
     { provide: AUTH_REPOSITORY, useExisting: PrismaAuthRepository },
   ],
-  exports: [AuthService, AccessTokenGuard, RoleGuard],
+  exports: [AuthService, AccessTokenGuard, RoleGuard, TenantMembershipGuard, AUTH_REPOSITORY],
 })
 export class AuthModule {}

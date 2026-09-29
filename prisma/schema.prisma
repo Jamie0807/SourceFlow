@@ -106,6 +106,7 @@ model User {
   reviewActions        ReviewAction[]    @relation("ReviewActionActor")
   exportJobs           ExportJob[]       @relation("ExportJobRequester")
   refreshSessions      RefreshSession[]
+  workspaceInvitations WorkspaceInvitation[] @relation("WorkspaceInvitationInviter")
 }
 
 model Workspace {
@@ -129,6 +130,27 @@ model Workspace {
   exportJobs         ExportJob[]
   taskRuns           TaskRun[]
   refreshSessions    RefreshSession[]
+  invitations        WorkspaceInvitation[]
+}
+
+model WorkspaceInvitation {
+  id          String    @id @default(uuid())
+  workspaceId String
+  email       String
+  role        UserRole
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  invitedById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  invitedBy User      @relation("WorkspaceInvitationInviter", fields: [invitedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([workspaceId])
+  @@index([workspaceId, email, expiresAt])
 }
 
 model RefreshSession {

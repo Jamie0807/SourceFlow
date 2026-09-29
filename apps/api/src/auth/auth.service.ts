@@ -2,7 +2,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 
 import { AuthError } from './auth.errors.js';
-import { AUTH_REPOSITORY, type AuthRepository } from './auth.repository.js';
+import {
+  AUTH_REPOSITORY,
+  type AuthRepository,
+  type SwitchWorkspaceInput,
+} from './auth.repository.js';
 import type { AuthUser, AuthWorkspace, CreateSessionInput } from './auth.types.js';
 import { PasswordHasher } from './crypto/password-hasher.js';
 import { AuthTokenService, type AuthRole } from './tokens/auth-token.service.js';
@@ -16,6 +20,13 @@ export type CredentialsInput = Readonly<{
 export type AuthResult = Readonly<{
   accessToken: string;
   refreshToken: string;
+  user: AuthUser;
+  workspace: AuthWorkspace;
+  role: AuthRole;
+}>;
+
+export type ActiveWorkspaceResult = Readonly<{
+  accessToken: string;
   user: AuthUser;
   workspace: AuthWorkspace;
   role: AuthRole;
@@ -190,6 +201,40 @@ export class AuthService {
     return {
       accessToken,
       refreshToken: nextRefresh.token,
+      user: userRecord.user,
+      workspace: membership.workspace,
+      role: membership.role,
+    };
+  }
+
+  async switchWorkspace(input: Omit<SwitchWorkspaceInput, 'now'>): Promise<ActiveWorkspaceResult> {
+    const membership = await this.repository.findMembership(input.userId, input.workspaceId);
+    if (membership === null) {
+      throw new AuthError('AUTH_FORBIDDEN');
+    }
+
+    const session = await this.repository.switchSessionWorkspace({
+      ...input,
+      now: new Date(),
+    });
+    if (session === null) {
+      throw new AuthError('AUTH_UNAUTHORIZED');
+    }
+
+    const userRecord = await this.repository.findUserById(input.userId);
+    if (userRecord === null) {
+      throw new AuthError('AUTH_UNAUTHORIZED');
+    }
+
+    const accessToken = await this.tokenService.signAccessToken({
+      sub: userRecord.user.id,
+      sessionId: session.id,
+      workspaceId: membership.workspaceId,
+      role: membership.role,
+    });
+
+    return {
+      accessToken,
       user: userRecord.user,
       workspace: membership.workspace,
       role: membership.role,

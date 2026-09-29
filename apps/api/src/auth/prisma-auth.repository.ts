@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, UserRole } from '@prisma/client';
 
 import { PrismaService } from '../database/prisma.service.js';
-import type { AuthRepository } from './auth.repository.js';
+import type { AuthRepository, SwitchWorkspaceInput } from './auth.repository.js';
 import type {
   AuthUserRecord,
   CreateSessionInput,
@@ -142,6 +142,24 @@ export class PrismaAuthRepository implements AuthRepository {
         slug: membership.workspace.slug,
       },
     };
+  }
+
+  async switchSessionWorkspace(input: SwitchWorkspaceInput): Promise<RefreshSessionRecord | null> {
+    const update = await this.prisma.refreshSession.updateMany({
+      where: {
+        id: input.sessionId,
+        userId: input.userId,
+        revokedAt: null,
+        expiresAt: { gt: input.now },
+      },
+      data: { workspaceId: input.workspaceId },
+    });
+    if (update.count !== 1) return null;
+
+    const session = await this.prisma.refreshSession.findUnique({
+      where: { id: input.sessionId },
+    });
+    return session === null ? null : toRefreshSession(session);
   }
 
   async rotateSession(input: RotateSessionInput): Promise<RefreshSessionRecord | null> {

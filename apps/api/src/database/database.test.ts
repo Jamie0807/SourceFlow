@@ -11,10 +11,15 @@ const refreshSessionMigrationPath = resolve(
   worktreeRoot,
   'prisma/migrations/20260928_add_refresh_sessions/migration.sql',
 );
+const workspaceInvitationMigrationPath = resolve(
+  worktreeRoot,
+  'prisma/migrations/20260928_add_workspace_invitations/migration.sql',
+);
 const seedPath = resolve(worktreeRoot, 'prisma/seed.ts');
 const readinessPath = resolve(import.meta.dirname, './database-health.ts');
 
 const tenantBusinessModels = [
+  'WorkspaceInvitation',
   'WorkspaceMember',
   'Brand',
   'Source',
@@ -77,6 +82,24 @@ describe('Prisma database contract', () => {
     expect(user).toMatch(/\brefreshSessions\s+RefreshSession\[\]/);
     expect(workspace).toMatch(/\brefreshSessions\s+RefreshSession\[\]/);
 
+    const invitation = readModel(schema, 'WorkspaceInvitation');
+    expect(invitation).toMatch(/\bworkspaceId\s+String/);
+    expect(invitation).toMatch(/\bemail\s+String/);
+    expect(invitation).toMatch(/\brole\s+UserRole/);
+    expect(invitation).toMatch(/\btokenHash\s+String\s+@unique/);
+    expect(invitation).toMatch(/\bexpiresAt\s+DateTime/);
+    expect(invitation).toMatch(/\bacceptedAt\s+DateTime\?/);
+    expect(invitation).toMatch(/\brevokedAt\s+DateTime\?/);
+    expect(invitation).toMatch(/\binvitedById\s+String/);
+    expect(invitation).toMatch(/@@index\(\[workspaceId\]/);
+    expect(invitation).toMatch(/@@index\(\[workspaceId, email, expiresAt\]\)/);
+    expect(user).toMatch(/\bworkspaceInvitations\s+WorkspaceInvitation\[\]/);
+    expect(workspace).toMatch(/\binvitations\s+WorkspaceInvitation\[\]/);
+
+    expect(invitation).toMatch(/\bid\s+String\s+@id/);
+    expect(invitation).toMatch(/\bcreatedAt\s+DateTime/);
+    expect(invitation).toMatch(/\bupdatedAt\s+DateTime/);
+
     expect(schema).toMatch(/email\s+String\s+@unique/);
     expect(schema).toMatch(/@@unique\(\[workspaceId, userId\]\)/);
     expect(schema).toMatch(/@@unique\(\[workspaceId, contentHash\]\)/);
@@ -85,6 +108,43 @@ describe('Prisma database contract', () => {
     expect(schema).toMatch(/providerMetadata\s+Json/);
     expect(schema).toMatch(/sourceReferences\s+Json/);
     expect(schema).toMatch(/assetReferences\s+Json/);
+  });
+
+  it('migrates workspace invitations with safe foreign keys, uniqueness, and lookup indexes', () => {
+    expect(existsSync(workspaceInvitationMigrationPath)).toBe(true);
+    if (!existsSync(workspaceInvitationMigrationPath)) return;
+
+    const migration = readFileSync(workspaceInvitationMigrationPath, 'utf8');
+    expect(migration).toMatch(/CREATE TABLE "WorkspaceInvitation"/);
+    expect(migration).toMatch(/"id" TEXT NOT NULL/);
+    expect(migration).toMatch(
+      /CONSTRAINT "WorkspaceInvitation_p(?:k)(?:e)(?:y)" PRIMARY KEY \("id"\)/,
+    );
+    expect(migration).toMatch(/"workspaceId" TEXT NOT NULL/);
+    expect(migration).toMatch(/"email" TEXT NOT NULL/);
+    expect(migration).toMatch(/"role" "UserRole" NOT NULL/);
+    expect(migration).toMatch(/"tokenHash" TEXT NOT NULL/);
+    expect(migration).toMatch(/"expiresAt" TIMESTAMP\(3\) NOT NULL/);
+    expect(migration).toMatch(/"acceptedAt" TIMESTAMP\(3\)/);
+    expect(migration).toMatch(/"revokedAt" TIMESTAMP\(3\)/);
+    expect(migration).toMatch(/"invitedById" TEXT NOT NULL/);
+    expect(migration).toMatch(/"createdAt" TIMESTAMP\(3\) NOT NULL DEFAULT CURRENT_TIMESTAMP/);
+    expect(migration).toMatch(/"updatedAt" TIMESTAMP\(3\) NOT NULL/);
+    expect(migration).toMatch(
+      /CREATE UNIQUE INDEX "WorkspaceInvitation_tokenHash_key" ON "WorkspaceInvitation"\("tokenHash"\)/,
+    );
+    expect(migration).toMatch(
+      /CREATE INDEX "WorkspaceInvitation_workspaceId_idx" ON "WorkspaceInvitation"\("workspaceId"\)/,
+    );
+    expect(migration).toMatch(
+      /CREATE INDEX "WorkspaceInvitation_workspaceId_email_expiresAt_idx" ON "WorkspaceInvitation"\("workspaceId", "email", "expiresAt"\)/,
+    );
+    expect(migration).toMatch(
+      /FOREIGN KEY \("workspaceId"\) REFERENCES "Workspace"\("id"\) ON DELETE RESTRICT ON UPDATE CASCADE/,
+    );
+    expect(migration).toMatch(
+      /FOREIGN KEY \("invitedById"\) REFERENCES "User"\("id"\) ON DELETE RESTRICT ON UPDATE CASCADE/,
+    );
   });
 
   it('migrates refresh sessions with safe foreign keys, uniqueness, and lookup indexes', () => {

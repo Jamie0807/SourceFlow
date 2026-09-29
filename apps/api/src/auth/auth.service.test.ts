@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
-import type { AuthRepository } from './auth.repository.js';
+import type { AuthRepository, SwitchWorkspaceInput } from './auth.repository.js';
 import type {
   AuthUserRecord,
   CreateSessionInput,
@@ -18,7 +18,14 @@ class InMemoryAuthRepository implements AuthRepository {
   readonly users = new Map<string, AuthUserRecord>();
   readonly sessions = new Map<string, RefreshSessionRecord>();
   readonly revokedFamilies: Array<{ familyId: string; reason: string }> = [];
+  readonly switchWorkspaceInputs: SwitchWorkspaceInput[] = [];
   forceRotationConflict = false;
+
+  addMembership(userId: string, membership: AuthUserRecord['memberships'][number]): void {
+    const record = this.users.get(userId);
+    if (record === undefined) return;
+    this.users.set(userId, { ...record, memberships: [...record.memberships, membership] });
+  }
 
   async findUserByEmail(email: string): Promise<AuthUserRecord | null> {
     return [...this.users.values()].find((record) => record.user.email === email) ?? null;
@@ -75,6 +82,23 @@ class InMemoryAuthRepository implements AuthRepository {
         .find((record) => record.user.id === userId)
         ?.memberships.find((membership) => membership.workspaceId === workspaceId) ?? null
     );
+  }
+
+  async switchSessionWorkspace(input: SwitchWorkspaceInput): Promise<RefreshSessionRecord | null> {
+    this.switchWorkspaceInputs.push(input);
+    const current = this.sessions.get(input.sessionId);
+    if (
+      current === undefined ||
+      current.userId !== input.userId ||
+      current.revokedAt !== null ||
+      current.expiresAt <= input.now
+    ) {
+      return null;
+    }
+
+    const next = { ...current, workspaceId: input.workspaceId };
+    this.sessions.set(input.sessionId, next);
+    return next;
   }
 
   async rotateSession(input: RotateSessionInput): Promise<RefreshSessionRecord | null> {
@@ -242,5 +266,103 @@ describe('AuthService', () => {
     await expect(service.logout(result.refreshToken)).resolves.toBeUndefined();
     const session = [...repository.sessions.values()][0];
     expect(session?.revokedAt).toBeInstanceOf(Date);
+  });
+
+  it('switches only to a workspace with a live membership', async () => {
+    const { service, repository } = createService();
+    const registered = await service.register({
+      email: 'creator@example.com',
+      password: 'strong password 123',
+    });
+    const session = [...repository.sessions.values()][0];
+    if (session === undefined) throw new Error('Expected a registered session');
+    repository.addMembership(registered.user.id, {
+      userId: registered.user.id,
+      workspaceId: 'workspace-2',
+      role: 'editor',
+      workspace: { id: 'workspace-2', name: '第二工作区', slug: 'workspace-2' },
+    });
+
+    const result = await service.switchWorkspace({
+      userId: registered.user.id,
+      sessionId: session.id,
+      workspaceId: 'workspace-2',
+    });
+
+    expect(result.workspace.id).toBe('workspace-2');
+    expect(result.role).toBe('editor');
+    expect(result.accessToken).toEqual(expect.any(String));
+    expect(result).not.toHaveProperty('refreshToken');
+    expect(repository.switchWorkspaceInputs).toHaveLength(1);
+    expect(repository.switchWorkspaceInputs[0]).toEqual(
+      expect.objectContaining({
+        userId: registered.user.id,
+        sessionId: session.id,
+        workspaceId: 'workspace-2',
+      }),
+    );
+  });
+
+  it('rejects switching to a workspace without membership', async () => {
+    const { service, repository } = createService();
+    const registered = await service.register({
+      email: 'creator@example.com',
+      password: 'strong password 123',
+    });
+    const session = [...repository.sessions.values()][0];
+    if (session === undefined) throw new Error('Expected a registered session');
+
+    await expect(
+      service.switchWorkspace({
+        userId: registered.user.id,
+        sessionId: session.id,
+        workspaceId: 'workspace-2',
+      }),
+    ).rejects.toMatchObject({ code: 'AUTH_FORBIDDEN', status: 403 });
+    expect(repository.sessions.get(session.id)?.workspaceId).toBe(registered.workspace.id);
+  });
+
+  it('rejects switching with a revoked session', async () => {
+    const { service, repository } = createService();
+    const registered = await service.register({
+      email: 'creator@example.com',
+      password: 'strong password 123',
+    });
+    const session = [...repository.sessions.values()][0];
+    if (session === undefined) throw new Error('Expected a registered session');
+    repository.sessions.set(session.id, {
+      ...session,
+      revokedAt: new Date(),
+    });
+
+    await expect(
+      service.switchWorkspace({
+        userId: registered.user.id,
+        sessionId: session.id,
+        workspaceId: registered.workspace.id,
+      }),
+    ).rejects.toMatchObject({ code: 'AUTH_UNAUTHORIZED', status: 401 });
+  });
+
+  it('rejects switching with an expired session', async () => {
+    const { service, repository } = createService();
+    const registered = await service.register({
+      email: 'creator@example.com',
+      password: 'strong password 123',
+    });
+    const session = [...repository.sessions.values()][0];
+    if (session === undefined) throw new Error('Expected a registered session');
+    repository.sessions.set(session.id, {
+      ...session,
+      expiresAt: new Date(Date.now() - 1),
+    });
+
+    await expect(
+      service.switchWorkspace({
+        userId: registered.user.id,
+        sessionId: session.id,
+        workspaceId: registered.workspace.id,
+      }),
+    ).rejects.toMatchObject({ code: 'AUTH_UNAUTHORIZED', status: 401 });
   });
 });
