@@ -33,6 +33,19 @@
 - `pnpm --filter @sourceflow/domain test:unit -- --run --coverage=false`：20 个测试文件、124 个测试通过、9 个集成测试跳过。
 - 领域代码覆盖率：100% statements、98.3% branches、100% functions、100% lines。
 
+## T008 Storage Adapter 执行进度
+
+- [x] 以 StoragePort 合同失败测试开始，覆盖上传、下载、删除和不存在对象。
+- [x] 实现 MinIO/S3 adapter，支持注入 S3 command client，保持 OSS 替换 seam。
+- [x] 固化 workspace/source 隔离 key，并拒绝不安全的存储标识符。
+- [x] 增加 AWS SDK v3 S3 Client API 依赖。
+
+验收记录（2026-09-29）：
+
+- `pnpm test:unit -- --run`：22 个测试文件、142 个测试通过、9 个集成测试跳过。
+- `pnpm typecheck`、`pnpm lint`、`pnpm build:api`、`pnpm format:check`、`pnpm spellcheck`、`git diff --check` 通过。
+- 本地 MinIO smoke：使用 `S3Client` 指向 `http://localhost:9000`、bucket `sourceflow-local`，执行上传、下载内容校验、删除和删除后 not-found，均通过；凭证来自 `Docker/compose/.env.example`，测试对象已删除。
+
 ## T017 首屏子集执行记录
 
 - [x] 固化 `specs/content-batch-web` 需求、计划、任务和检查清单。

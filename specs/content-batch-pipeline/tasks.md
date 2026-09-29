@@ -93,10 +93,12 @@
 - **依赖：** T003、T005
 - **Worktree：** `feat/content-batch-storage`
 - **文件：** `apps/api/src/storage/storage.port.ts`、`apps/api/src/storage/minio-storage.adapter.ts`、OSS 适配器接口测试
-- [ ] 先写上传、下载、删除和不存在 key 的失败测试。
-- [ ] 实现 MinIO 本地存储。
-- [ ] 预留 OSS 实现所需的接口，不在本地测试调用真实 OSS。
-- [ ] 文件 key 包含 workspace 和 source id，避免跨租户覆盖。
+- [x] 先写上传、下载、删除和不存在 key 的失败测试。
+- [x] 实现 MinIO 本地存储。
+- [x] 预留 OSS 实现所需的接口，不在本地测试调用真实 OSS。
+- [x] 文件 key 包含 workspace 和 source id，避免跨租户覆盖。
+
+> 2026-09-29：使用 AWS SDK v3 S3 Client 实现 MinIO adapter；真实本地 MinIO smoke 已验证上传、下载、删除和不存在对象错误。Storage key 固定为 `workspaces/{workspaceId}/sources/{sourceId}/original`，并拒绝不安全的租户标识符。
 
 ### T009 实现 BullMQ 队列和 Source 处理 Worker
 
