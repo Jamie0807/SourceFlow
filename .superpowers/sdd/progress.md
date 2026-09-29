@@ -19,6 +19,20 @@
 
 约束：不自动提交、不自动推送、不自动合并；提交信息必须使用英文。
 
+## T003/T005 依赖收敛记录
+
+- [x] 核对并收敛 T003 本地 Docker Compose：MinIO 配置、凭证变量、数据卷和健康检查均已存在。
+- [x] 核对并收敛 T005 领域状态机、文件校验、平台能力和导出 manifest。
+- [x] 修正 `packages/domain` 独立测试脚本的 Vitest 配置路径。
+- [x] 使用可用端口完成 PostgreSQL、Redis、MinIO 健康验证。
+
+验收记录（2026-09-29）：
+
+- `docker compose --env-file Docker/compose/.env.example -f Docker/compose/docker-compose.yml config` 通过。
+- `POSTGRES_PORT=55432 docker compose --env-file Docker/compose/.env.example -f Docker/compose/docker-compose.yml ps` 显示 PostgreSQL、Redis、MinIO 均为 healthy；默认 5432 被本机其他容器占用，因此未停止无关容器。
+- `pnpm --filter @sourceflow/domain test:unit -- --run --coverage=false`：20 个测试文件、124 个测试通过、9 个集成测试跳过。
+- 领域代码覆盖率：100% statements、98.3% branches、100% functions、100% lines。
+
 ## T017 首屏子集执行记录
 
 - [x] 固化 `specs/content-batch-web` 需求、计划、任务和检查清单。
