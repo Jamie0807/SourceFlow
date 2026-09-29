@@ -33,10 +33,12 @@
 - **依赖：** T001
 - **Worktree：** `feat/content-batch-infra`
 - **文件：** `Docker/compose/docker-compose.yml`、`Docker/compose/.env.example`、`Docker/README.md`
-- [ ] 保留 PostgreSQL 和 Redis 官方 latest 镜像。
-- [ ] 增加 MinIO 官方镜像、数据卷和健康检查。
-- [ ] 通过环境变量设置端口和密码，禁止写入真实凭证。
-- [ ] 验证 `docker compose config` 和服务健康状态。
+- [x] 保留 PostgreSQL 和 Redis 官方 latest 镜像。
+- [x] 增加 MinIO 官方镜像、数据卷和健康检查。
+- [x] 通过环境变量设置端口和密码，禁止写入真实凭证。
+- [x] 验证 `docker compose config` 和服务健康状态。
+
+> 2026-09-29：使用 `docker compose config` 验证配置；本机 5432 已被其他容器占用，使用 `POSTGRES_PORT=55432` 验证 PostgreSQL、Redis、MinIO 均为 healthy。默认端口仍由环境变量保持可配置。
 
 ### T004 建立 Prisma 数据模型和迁移
 
@@ -53,11 +55,13 @@
 - **依赖：** T001
 - **Worktree：** `feat/content-batch-domain`
 - **文件：** `packages/domain/src/*.ts`、`packages/domain/src/*.test.ts`
-- [ ] 先写 Source/Batch/Asset/Review 状态转换失败测试。
-- [ ] 实现合法、非法、重复和取消转换。
-- [ ] 实现 MP4/MP3/WAV/TXT、1GB、60 分钟校验。
-- [ ] 实现三平台能力卡片、资产类型和导出 manifest 类型。
-- [ ] 达到核心领域行覆盖率 ≥95%、分支覆盖率 ≥90%。
+- [x] 先写 Source/Batch/Asset/Review 状态转换失败测试。
+- [x] 实现合法、非法、重复和取消转换。
+- [x] 实现 MP4/MP3/WAV/TXT、1GB、60 分钟校验。
+- [x] 实现三平台能力卡片、资产类型和导出 manifest 类型。
+- [x] 达到核心领域行覆盖率 ≥95%、分支覆盖率 ≥90%。
+
+> 2026-09-29：全仓 Vitest 124 passed、9 skipped；领域代码覆盖率为 100% statements、98.3% branches、100% functions、100% lines。修正 `packages/domain` 独立测试脚本的 Vitest 配置路径后，按包命令可正常运行。
 
 ## 阶段 2：API 与异步任务
 
@@ -89,10 +93,12 @@
 - **依赖：** T003、T005
 - **Worktree：** `feat/content-batch-storage`
 - **文件：** `apps/api/src/storage/storage.port.ts`、`apps/api/src/storage/minio-storage.adapter.ts`、OSS 适配器接口测试
-- [ ] 先写上传、下载、删除和不存在 key 的失败测试。
-- [ ] 实现 MinIO 本地存储。
-- [ ] 预留 OSS 实现所需的接口，不在本地测试调用真实 OSS。
-- [ ] 文件 key 包含 workspace 和 source id，避免跨租户覆盖。
+- [x] 先写上传、下载、删除和不存在 key 的失败测试。
+- [x] 实现 MinIO 本地存储。
+- [x] 预留 OSS 实现所需的接口，不在本地测试调用真实 OSS。
+- [x] 文件 key 包含 workspace 和 source id，避免跨租户覆盖。
+
+> 2026-09-29：使用 AWS SDK v3 S3 Client 实现 MinIO adapter；真实本地 MinIO smoke 已验证上传、下载、删除和不存在对象错误。Storage key 固定为 `workspaces/{workspaceId}/sources/{sourceId}/original`，并拒绝不安全的租户标识符。
 
 ### T009 实现 BullMQ 队列和 Source 处理 Worker
 
