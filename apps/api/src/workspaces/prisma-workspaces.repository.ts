@@ -3,6 +3,7 @@ import { Prisma, UserRole } from '@prisma/client';
 
 import { WorkspaceError } from '../auth/auth.errors.js';
 import type { AuthRole } from '../auth/tokens/auth-token.service.js';
+import { workspaceScopedWhere } from '../common/workspace-resource-scope.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { WorkspaceRepository } from './workspaces.repository.js';
 import type { WorkspaceInvitationRecord, WorkspaceOverview } from './workspaces.types.js';
@@ -60,9 +61,9 @@ export class PrismaWorkspacesRepository implements WorkspaceRepository {
     };
   }
 
-  findMemberByEmail(workspaceId: string, email: string): Promise<{ userId: string } | null> {
+  async findMemberByEmail(workspaceId: string, email: string): Promise<{ userId: string } | null> {
     return this.prisma.workspaceMember.findFirst({
-      where: { workspaceId, user: { email } },
+      where: workspaceScopedWhere(workspaceId, { user: { email } }),
       select: { userId: true },
     });
   }
@@ -73,13 +74,12 @@ export class PrismaWorkspacesRepository implements WorkspaceRepository {
     now: Date,
   ): Promise<WorkspaceInvitationRecord | null> {
     const invitation = await this.prisma.workspaceInvitation.findFirst({
-      where: {
-        workspaceId,
+      where: workspaceScopedWhere(workspaceId, {
         email,
         acceptedAt: null,
         revokedAt: null,
         expiresAt: { gt: now },
-      },
+      }),
     });
     return invitation === null ? null : toInvitationRecord(invitation);
   }
@@ -93,18 +93,19 @@ export class PrismaWorkspacesRepository implements WorkspaceRepository {
     invitedById: string;
     now: Date;
   }): Promise<WorkspaceInvitationRecord> {
+    const activeInvitationWhere = workspaceScopedWhere(input.workspaceId, {
+      email: input.email,
+      acceptedAt: null,
+      revokedAt: null,
+      expiresAt: { gt: input.now },
+    });
+
     for (let attempt = 0; attempt < MAX_CREATE_INVITATION_SERIALIZATION_RETRIES; attempt += 1) {
       try {
         return await this.prisma.$transaction(
           async (transaction) => {
             const activeInvitation = await transaction.workspaceInvitation.findFirst({
-              where: {
-                workspaceId: input.workspaceId,
-                email: input.email,
-                acceptedAt: null,
-                revokedAt: null,
-                expiresAt: { gt: input.now },
-              },
+              where: activeInvitationWhere,
             });
             if (activeInvitation !== null) {
               throw new WorkspaceError('WORKSPACE_INVITATION_EXISTS');

@@ -93,3 +93,26 @@
 - Task 级复审已完成并修复 Important 问题；最终独立复审代理因账户用量限制未产出报告，本轮由主智能体完成只读 diff/安全边界复核，未执行自动合并。
 
 Task 1 备注：schema validation、Prisma Client generation、全量 Vitest、lint、format 和 typecheck 已通过；真实 PostgreSQL migration 尚未应用，原因已记录在子代理报告中。
+
+## T007 资源查询 workspace 归属校验执行进度
+
+- [x] Task 1：新增 `workspaceScopedWhere` 纯函数，覆盖 workspace 条件注入、冲突覆盖和空 workspace 拒绝；任务审查通过。
+- [x] Task 2：成员、活跃邀请和邀请创建事务查询接入 `workspaceScopedWhere`，空 workspace 在 Prisma 查询/事务前拒绝；相关租户测试 42/42 通过。
+
+Task 2 备注：独立任务审查代理因账户用量限制未返回报告；主代理按同一规格和质量清单完成只读复核，未发现阻塞问题。token hash onboarding 查询保持原有无当前 workspace 条件。
+
+- [x] Task 3：更新 T007 当前可接入查询范围的任务追踪，执行全量质量验证并记录结果。
+
+本轮设计与测试证据：`docs/superpowers/specs/2026-09-29-t007-resource-ownership-design.md` 和 `docs/superpowers/plans/2026-09-29-t007-resource-ownership.md` 记录边界及后续资源 API 的验收要求。Task 1 的 helper 测试先因模块不存在而失败，随后 5/5 通过；Task 2 的 repository 边界测试先显示空 workspace 查询被放行，随后 11/11 通过，相关租户测试 37/37 通过。token hash onboarding 查询保留例外；本轮没有新增数据库迁移，也没有提前实现 T011。
+
+Task 3 验收记录（2026-09-30）：
+
+- `corepack pnpm lint`、`corepack pnpm format:check`、`corepack pnpm spellcheck`、`corepack pnpm typecheck`、`git diff --check` 均退出 0；spellcheck 检查 74 个文件、0 个问题。
+- `corepack pnpm test:unit -- --run`：24 个测试文件、151 个测试通过；9 个 PostgreSQL 集成用例因未提供 `DATABASE_URL` 跳过。全仓覆盖率为 64.11% statements、82.29% branches、77.51% functions、64.11% lines，未达到 85%/80%/85%/85% 门槛；workspace repository 分支覆盖率为 81.63%，低于核心边界 90% 要求。
+- `corepack pnpm test:component -- --run`：1 个文件、4 个测试通过；`corepack pnpm build:api` 和 `corepack pnpm build:web` 均退出 0。
+- `corepack pnpm test:integration -- --grep @smoke` 退出 0，但仓库当前没有 `tests/integration`，Playwright 列表为 0 个测试，此项仅验证无测试时的通过路径，未覆盖浏览器 smoke。
+- `docker compose -f Docker/compose/docker-compose.yml config` 因缺少必需的 `POSTGRES_PASSWORD` 退出 1；使用仓库示例环境文件的 `docker compose --env-file Docker/compose/.env.example -f Docker/compose/docker-compose.yml config --quiet` 退出 0。
+
+最终复核（2026-09-30）：`corepack pnpm verify:push` 在本 Worktree 新鲜执行并退出 0，报告 151 passed、9 skipped、组件 4 passed、Web/API/Worker 构建和带示例环境的 Docker Compose 校验通过；覆盖率与 Playwright 空测试缺口仍按上文保留。新增设计稿、计划和进度文档通过 Prettier 与定向 CSpell 检查；对整个既有 `specs/content-batch-pipeline/tasks.md` 执行 CSpell 时仍报告历史专有词条，未在本轮扩大词典或修改无关文档。最终全分支复核未发现资源归属安全阻塞问题，但按项目 DoD 不能宣称全仓门禁和真实集成/E2E 已完成。
+
+本地环境补充（2026-09-30）：在 Worktree 根目录增加被 `.gitignore` 忽略的 `.env`，将 PostgreSQL `DATABASE_URL` 指向本机 `55432`。通过显式 source 该文件运行 `apps/api/src/auth/auth.integration.test.ts`，9/9 通过；Vitest 当前不会自动加载 `.env`，后续命令需显式注入环境变量。

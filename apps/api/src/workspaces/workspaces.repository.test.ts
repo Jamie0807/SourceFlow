@@ -147,6 +147,35 @@ describe('PrismaWorkspacesRepository', () => {
     });
   });
 
+  it('rejects an empty workspaceId before member or invitation resource queries', async () => {
+    const { prisma, repository } = createRepository();
+    prisma.workspaceMember.findFirst.mockResolvedValue(null);
+    const now = new Date('2026-09-28T12:00:00.000Z');
+    const input = {
+      workspaceId: ' ',
+      email: 'editor@example.com',
+      role: 'editor' as const,
+      tokenHash: 'hash-empty-workspace',
+      expiresAt: new Date('2026-10-01T00:00:00.000Z'),
+      invitedById: 'owner-1',
+      now,
+    } satisfies Parameters<WorkspaceRepository['createInvitation']>[0];
+
+    await expect(repository.findMemberByEmail('', input.email)).rejects.toMatchObject({
+      code: 'WORKSPACE_ACCESS_DENIED',
+    });
+    await expect(repository.findActiveInvitation('\t', input.email, now)).rejects.toMatchObject({
+      code: 'WORKSPACE_ACCESS_DENIED',
+    });
+    await expect(repository.createInvitation(input)).rejects.toMatchObject({
+      code: 'WORKSPACE_ACCESS_DENIED',
+    });
+
+    expect(prisma.workspaceMember.findFirst).not.toHaveBeenCalled();
+    expect(prisma.workspaceInvitation.findFirst).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('creates an invitation using only the token hash', async () => {
     const { prisma, repository } = createRepository();
     const transaction = {

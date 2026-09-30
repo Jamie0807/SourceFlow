@@ -85,10 +85,10 @@
 - [x] 使用 T006 注册事务创建的默认 Workspace 和 Brand，不重复创建。
 - [x] 实现成员邀请和角色查询。
 - [x] 实现 Tenant Membership Guard，从数据库读取当前成员角色；JWT 中的 workspace/role 只作请求提示。
-- [ ] 为每个资源查询增加 workspace 归属校验。
+- [x] 为当前可接入的资源查询增加 workspace 归属校验；后续资源 API 继续按本条验收。
 - [x] 写 A workspace 访问 B workspace 的越权测试。
 
-> T007 已完成当前 Workspace、成员邀请、活跃 Workspace 切换和租户守卫范围的实现与 PostgreSQL 验收。资源级归属校验保留到后续资源 API 任务；当前仓库尚不存在可接入的资源 HTTP API。
+> T007 已完成当前 Workspace、成员邀请、活跃 Workspace 切换和租户守卫范围的实现与 PostgreSQL 验收。当前可接入的 WorkspaceMember、活跃 WorkspaceInvitation 查询及邀请创建事务中的重复邀请检查均通过 `workspaceScopedWhere` 携带可信的 workspace 归属条件；按 token hash 查找和接受邀请属于 onboarding 例外。Source、ContentBatch、Asset 等资源 API 尚不存在；后续任务新增资源单条、列表及写入查询时，必须继续复用该边界，并验证同 workspace 成功、跨 workspace 拒绝或空结果、空 workspace 不执行宽查询。
 
 ### T008 实现 Storage Adapter
 
