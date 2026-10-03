@@ -116,3 +116,58 @@ Task 3 验收记录（2026-09-30）：
 最终复核（2026-09-30）：`corepack pnpm verify:push` 在本 Worktree 新鲜执行并退出 0，报告 151 passed、9 skipped、组件 4 passed、Web/API/Worker 构建和带示例环境的 Docker Compose 校验通过；覆盖率与 Playwright 空测试缺口仍按上文保留。新增设计稿、计划和进度文档通过 Prettier 与定向 CSpell 检查；对整个既有 `specs/content-batch-pipeline/tasks.md` 执行 CSpell 时仍报告历史专有词条，未在本轮扩大词典或修改无关文档。最终全分支复核未发现资源归属安全阻塞问题，但按项目 DoD 不能宣称全仓门禁和真实集成/E2E 已完成。
 
 本地环境补充（2026-09-30）：在 Worktree 根目录增加被 `.gitignore` 忽略的 `.env`，将 PostgreSQL `DATABASE_URL` 指向本机 `55432`。通过显式 source 该文件运行 `apps/api/src/auth/auth.integration.test.ts`，9/9 通过；Vitest 当前不会自动加载 `.env`，后续命令需显式注入环境变量。
+
+## T009 Source 处理 Worker 执行进度
+
+- [x] 任务 1：新增共享 Source 任务契约，覆盖 `source.transcribe`、`source.analyze`、workspace+taskRun JobId、JSON-safe 消息/结果和显式失败重试标记；从 domain barrel 导出。
+
+任务 1 验收记录（2026-09-30）：
+
+- 遵循 TDD：契约测试先因模块不存在失败，随后目标测试 5/5 通过。
+- Domain 回归：156 个测试通过、9 个跳过；`pnpm typecheck`、定向 ESLint、Prettier 和 `git diff --check` 通过。
+- 任务级返工复审通过，无 P0/P1/P2；审查报告见 `.superpowers/sdd/task-1-review-r2.md`。
+- 风险：9 个认证集成测试仍按项目配置跳过；消息对象应通过 `createSourceTaskMessage` 运行时校验后进入队列。
+
+- [x] 任务 2：实现 Queue Port、Fake Queue 和 BullMQ/Redis adapter；完成 domain ESM 构建导出、BullMQ 合法 JobId、重试上下文和资源关闭。
+
+任务 2 验收记录（2026-10-01）：
+
+- 目标队列/domain 测试：19 个通过；Redis smoke 1 个明确跳过（未配置 `REDIS_URL`）。
+- 全仓单元测试：232 个通过、10 个跳过；TypeScript、ESLint、Prettier、CSpell 和 `git diff --check` 通过。
+- `corepack pnpm build:worker` 按 domain → worker 构建通过；Node 直接加载实际 dist Queue adapter 和 domain ESM 通过。
+- 首轮审查发现并修复三项阻断问题：BullMQ `:` JobId、生产模块解析、test-utils 反向依赖 Worker；第二轮独立复审无 P0/P1/P2。
+- 风险：尚未连接真实 Redis 验证网络入队/消费；构建产物已清理，不纳入工作区。
+
+- [x] 任务 3：实现 TaskRunStore 与 Prisma adapter，完成 workspace 归属条件、幂等/并发 P2002、canonical taskRunId、状态转换、重试次数、取消和 JSON 安全边界。
+
+任务 3 验收记录（2026-10-01）：
+
+- Store focused：13 个测试通过；TaskRun adapter 局部覆盖率 100% 行/分支/函数。
+- 全仓单元测试：245 个通过、10 个跳过；typecheck、`build:worker`、lint、format、spellcheck、component 4/4 通过。
+- 首轮复审发现并修复 canonical ID 不一致、失败文本泄漏和循环 JSON 三项问题；返工后独立复审无 P0/P1/P2。
+- 风险：未配置 `DATABASE_URL`/`REDIS_URL`，真实 PostgreSQL/Redis 集成未执行；全仓覆盖率 68.38%，低于既定全局门槛。
+
+- [x] 任务 4：实现 workspace-scoped Source Lookup、Mock Processor 和 Source Task Handler，覆盖 canonical payload、成功、重试、取消、终态幂等、基础设施失败收敛与安全错误映射。
+
+任务 4 验收记录（2026-10-02）：
+
+- 遵循 TDD：Source Handler/Lookup 测试先因模块不存在失败；后续审查问题均先补失败回归测试，再做最小修复。
+- Focused：4 个文件、50/50 通过；全仓 unit：282 个通过、10 个跳过。
+- `pnpm typecheck`、`pnpm build:worker`、`pnpm lint`、`pnpm format:check`、`pnpm spellcheck`、`git diff --check` 通过。
+- 多轮复审修复 payload 不一致、取消/claim 竞态、queued/processing 基础设施终态恢复、raw cause 泄漏，以及 throwing getter/Proxy 绕过安全映射；终轮独立复审无 P0/P1/P2，报告见 `.superpowers/sdd/task-4-review-r6.md`。
+- 风险：全仓覆盖率为 70.87% statements、85.30% branches、82.70% functions、70.87% lines；`source-processing` 为 89.16%/85.95%/89.28%/89.16%，仍低于项目核心模块行 95%、分支 90% 门槛。未配置 `REDIS_URL`，真实 Redis/BullMQ smoke 仍跳过。
+
+- [x] 任务 5：组装可启动 Worker runtime，接入 Prisma、BullMQ Queue、TaskRunStore、SourceLookup、Mock Processor 与 Handler；完成并发配置、优雅关闭、信号处理和 T009 追踪。
+
+任务 5 验收记录（2026-10-03）：
+
+- 遵循 TDD：先增加关闭失败仍释放 Prisma、稳定错误、依赖图组装和 SIGTERM/SIGINT 去重注册测试；首次运行 3 条按预期失败，随后最小实现通过。
+- `corepack pnpm verify:push` 通过：全仓 unit 294 个通过、10 个跳过；component 4/4 通过；typecheck、lint、格式、spellcheck、Web/API/Worker 构建和 Docker Compose config 均通过。
+- Worker focused：`main` 与 BullMQ Queue 测试 17/17 通过；`WORKER_CONCURRENCY` 的合法值传入 BullMQ Worker，非法值回退为 2 并使用固定脱敏 warning；缺少 Redis/PostgreSQL URL 时在运行前抛稳定配置错误。
+- `close()` 先关闭 Queue（Queue 内部先停 Worker），再断开 Prisma；清理失败仍继续释放后续资源，只向调用方抛出固定 `Worker shutdown failed`。SIGTERM/SIGINT 共用该关闭路径且针对同一 runtime 只注册一次。
+- `Docker/compose/.env.example` 增加 `WORKER_CONCURRENCY=2`；T009 任务追踪明确 Fake Queue 默认测试、显式 Redis smoke、workspace 归属和 T010/T011 未完成边界。
+- 风险：全仓覆盖率为 71.26% statements、85.34% branches、81.27% functions、71.26% lines，未达 85%/80%/85%/85% 门槛；Worker `main.ts` 为 77.77% 行、82.75% 分支。当前 Worktree 没有 `.env`，Redis smoke 明确跳过；Playwright smoke 仍为 0 个测试。对整个既有 `specs/content-batch-pipeline/tasks.md` 执行 CSpell 时存在历史词 `lintstagedrc`、`volcengine`，本轮新增 T009 文本未新增拼写问题。
+
+最终审查返工（2026-10-03）：全分支审查发现启动失败资源释放、重复 `processing` delivery 重排队和 Source 查询顺序三项问题，均已按失败测试修复。复跑 Worker focused：73 passed、1 Redis skipped；复跑 `corepack pnpm verify:push`：295 passed、10 skipped，lint、格式、spellcheck、typecheck、构建与 Docker Compose config 均通过，`git diff --check` 通过。最新全仓覆盖率为 71.25% statements、85.10% branches、81.27% functions、71.25% lines，覆盖率、真实 Redis/PostgreSQL 与零 Playwright smoke 缺口仍保留。
+
+最终审查 R2 返工（2026-10-03）：状态读取或 claim 所有权无法确认时改为只抛安全错误、保持 TaskRun 原状态，防止重复 delivery 覆盖活跃 `processing`；启动失败会注销 SIGTERM/SIGINT listener 后再清理资源。新鲜 Worker focused：74 passed、1 Redis skipped；`corepack pnpm verify:push`：296 passed、10 skipped，全部脚本门禁通过，`git diff --check` 通过。最新全仓覆盖率 71.32% statements、85.19% branches、80.95% functions、71.32% lines，覆盖率、真实 Redis/PostgreSQL 和零 Playwright smoke 缺口仍保留。

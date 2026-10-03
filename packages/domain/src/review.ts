@@ -1,11 +1,11 @@
-import { canTransition, transitionFrom, type TransitionTable } from './state-transition';
-import { SOURCE_TRANSITIONS, type SourceEvent, type SourceStatus } from './source';
+import { canTransition, transitionFrom, type TransitionTable } from './state-transition.js';
+import { SOURCE_TRANSITIONS, type SourceEvent, type SourceStatus } from './source.js';
 import {
   CONTENT_BATCH_TRANSITIONS,
   type ContentBatchEvent,
   type ContentBatchStatus,
-} from './content-batch';
-import { ASSET_TRANSITIONS, type AssetEvent, type AssetStatus } from './asset';
+} from './content-batch.js';
+import { ASSET_TRANSITIONS, type AssetEvent, type AssetStatus } from './asset.js';
 
 export const REVIEW_STATUSES = [
   'draft',

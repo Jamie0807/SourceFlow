@@ -1,4 +1,4 @@
-import type { AssetType, Platform } from './platform';
+import type { AssetType, Platform } from './platform.js';
 
 export interface ExportManifestAsset {
   readonly assetId: string;

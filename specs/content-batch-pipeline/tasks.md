@@ -107,10 +107,12 @@
 - **依赖：** T004、T005、T008
 - **Worktree：** `feat/content-batch-source-processing`
 - **文件：** `apps/worker/src/queue/*`、`apps/worker/src/source-processing/*`、`packages/test-utils/src/*`
-- [ ] 先写任务状态、幂等、取消、重试和失败映射测试。
-- [ ] 实现 `source.transcribe` 和 `source.analyze`。
-- [ ] 保存 queued/running/succeeded/failed/cancelled 状态。
-- [ ] 刷新页面后可以通过 task id 恢复状态。
+- [x] 先写任务状态、幂等、取消、重试和失败映射测试。
+- [x] 实现 `source.transcribe` 和 `source.analyze`。
+- [x] 保存 queued/processing/succeeded/failed/cancelled 状态。
+- [x] 为后续页面恢复提供按 workspace + task id 查询的持久化 TaskRun 状态。
+
+> 2026-10-03：默认单元测试使用 Fake Queue；BullMQ/Redis smoke 仅在显式配置 `REDIS_URL` 时执行。TaskRun 的读取、状态转换和 Source 查询均携带 workspace 归属条件。T009 只完成 Worker 处理链路和持久化查询能力，尚未实现 T010 Provider，也尚未实现 T011 HTTP API 或页面恢复流程。
 
 ### T010 实现火山引擎语音识别和文本 Provider
 

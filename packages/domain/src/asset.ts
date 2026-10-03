@@ -1,4 +1,4 @@
-import { canTransition, transitionFrom, type TransitionTable } from './state-transition';
+import { canTransition, transitionFrom, type TransitionTable } from './state-transition.js';
 
 export const ASSET_STATUSES = [
   'draft',

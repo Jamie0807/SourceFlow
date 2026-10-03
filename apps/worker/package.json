@@ -9,5 +9,11 @@
   },
   "devDependencies": {
     "tsx": "^4.19.4"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.0",
+    "@sourceflow/domain": "workspace:*",
+    "bullmq": "^5.81.5",
+    "ioredis": "^5.11.1"
   }
 }

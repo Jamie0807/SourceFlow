@@ -2,6 +2,9 @@
   "name": "@sourceflow/test-utils",
   "private": true,
   "type": "module",
+  "dependencies": {
+    "@sourceflow/domain": "workspace:*"
+  },
   "scripts": {
     "test:unit": "vitest run --config ../../vitest.config.ts"
   }
