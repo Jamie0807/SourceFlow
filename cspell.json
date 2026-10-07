@@ -14,6 +14,10 @@
     "Prisma",
     "BullMQ",
     "wechat",
-    "topbar"
+    "topbar",
+    "volcengine",
+    "seedasr",
+    "bigasr",
+    "doubao"
   ]
 }

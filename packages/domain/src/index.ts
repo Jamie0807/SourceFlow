@@ -1,6 +1,7 @@
 export type SourceFlowHealth = 'foundation-ready';
 
 export * from './asset.js';
+export * from './ai-provider.js';
 export * from './content-batch.js';
 export * from './export-manifest.js';
 export * from './platform.js';

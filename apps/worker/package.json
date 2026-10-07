@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "test:volcengine:smoke": "tsx scripts/volcengine-provider.smoke.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.4"

@@ -118,13 +118,15 @@
 
 - **依赖：** T009
 - **Worktree：** `feat/content-batch-volcengine-provider`
-- **文件：** `packages/domain/src/ai-provider.ts`、`apps/worker/src/providers/mock.provider.ts`、`apps/worker/src/providers/volcengine.provider.ts`
-- [ ] 写 Provider 接口合同测试。
-- [ ] 写 Mock Provider，默认供测试和无凭证环境使用。
-- [ ] 接入火山引擎语音识别和文本生成 API。
-- [ ] 通过环境变量配置 endpoint、model、access key 和 secret。
-- [ ] 映射超时、限流、鉴权失败、内容错误和未知错误。
-- [ ] 真实 Provider smoke 必须显式开启，不进入默认 CI。
+- **文件：** `packages/domain/src/ai-provider.ts`、`apps/worker/src/providers/*`、`apps/worker/scripts/volcengine-provider.smoke.ts`
+- [x] 写 Provider 接口合同测试。
+- [x] 写 Mock Provider，默认供测试和无凭证环境使用。
+- [x] 接入火山引擎语音识别和文本生成 API。
+- [x] 通过环境变量配置 endpoint、model、LAS API key 和 Ark API key。
+- [x] 映射超时、限流、鉴权失败、内容错误和未知错误。
+- [x] 真实 Provider smoke 必须显式开启，不进入默认 CI。
+
+> 2026-10-07：实现与本地质量门禁已完成；完整验收证据、未满足的项目级 DoD 门槛及边界见 [T010 最终复核](t010-final-review.md)。该实现尚未接入 T009 的生产 SourceProcessor；真实火山引擎 smoke 未执行，全仓覆盖率未达规约门槛，Playwright smoke 命令没有实际测试用例。因此本记录表示 T010 实现任务已交付，不表示项目级完整 DoD 全部满足。
 
 ### T011 实现内容源 API
 
