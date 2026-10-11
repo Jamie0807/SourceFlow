@@ -24,6 +24,23 @@ docker compose --env-file Docker/compose/.env -f Docker/compose/docker-compose.y
 
 当前 Compose 启动 PostgreSQL、Redis 和 MinIO 基础服务。MinIO S3 API 默认访问地址为 `http://localhost:9000`，管理控制台默认访问地址为 `http://localhost:9001`。API、Worker、Web 服务在应用源码接入后使用对应镜像加入生产 Compose。
 
+### MinIO 内容源存储
+
+T011 的 API 与 Worker 必须使用相同的 `MINIO_ENDPOINT`、`MINIO_BUCKET`、`MINIO_REGION`、`MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD`。在宿主机运行 API/Worker 时，示例 endpoint 为 `http://localhost:9000`；若应用进程也运行在 Compose 网络内，应使用服务名 endpoint `http://minio:9000`，不能在容器内使用 `localhost` 指向 MinIO。
+
+Compose 会启动 MinIO，但不会自动创建 bucket。首次运行时打开 `http://localhost:9001`，使用本地 `.env` 中的 MinIO 账号登录，并创建与 `MINIO_BUCKET` 完全同名的 bucket（示例为 `sourceflow-local`）。生产环境应提前创建 bucket，并给 API/Worker 配置专用的最小权限凭证；不要在生产中复用 root 用户。
+
+从仓库根目录启动宿主机 API/Worker 前，可将本地配置导入当前 shell：
+
+```bash
+set -a
+source Docker/compose/.env
+set +a
+corepack pnpm dev:api
+```
+
+Worker 使用相同环境变量，启动命令为 `corepack pnpm dev:worker`。不要把本机 `.env` 或任何真实 MinIO 凭证提交到 Git。
+
 ## 4. API 镜像与 Prisma
 
 API 镜像会在构建阶段复制 `prisma/`、安装 Prisma Client 并生成客户端：

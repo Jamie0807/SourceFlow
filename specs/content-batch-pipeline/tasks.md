@@ -130,12 +130,18 @@
 
 ### T011 实现内容源 API
 
+> 2026-10-08 设计确认：采用 S3/MinIO 预签名 PUT 直传；`upload-complete` 校验对象元数据后排入异步 `source.validate`，Worker 验证真实文件格式与媒体时长，通过后 Source 才进入 `uploaded`。处理阶段只排一个任务（TXT 分析、音视频转写），不包含转写后自动分析或 T010 Provider 生产接入。实现设计：[T011 设计稿](../../docs/superpowers/specs/2026-10-08-t011-source-api-design.md)；实现计划：[T011 计划](../../docs/superpowers/plans/2026-10-08-t011-source-api.md)。
+
 - **依赖：** T007、T008、T009
-- **文件：** `apps/api/src/sources/*`
-- [ ] 写文件类型、大小、时长、重复 hash 和未授权访问测试。
-- [ ] 实现 source 创建、上传完成、处理、查询和取消。
-- [ ] 处理接口创建 BullMQ 任务而不是阻塞 HTTP。
-- [ ] 返回统一错误结构和 request id。
+- **Worktree：** `feat/t011-source-api`
+- **文件：** `packages/domain/src/source*`、`apps/api/src/storage/*`、`apps/api/src/sources/*`、`apps/worker/src/source-processing/*`、`prisma/schema.prisma`
+- [x] 实现 Source 创建、预签名 PUT、上传完成、处理、查询、取消 API。
+- [x] 增加 `validating` Source 状态与异步 `source.validate` TaskRun；Worker 验证对象 checksum、真实格式、1 GiB 大小与 ≤60 分钟媒体时长。
+- [x] 处理接口按类型创建单个 BullMQ 任务（TXT→`source.analyze`，媒体→`source.transcribe`），使用确定性 idempotency key，不阻塞 HTTP。
+- [x] 所有 Source/TaskRun 读取和写入按 workspace 归属校验；写接口限 owner/editor；重复内容不自动删除。
+- [x] 增加统一错误结构和 request id，覆盖队列发布失败、跨租户资源和取消竞态。
+
+> 2026-10-09：Task 7 最终复审修复后，既有 `GET /sources/:sourceId` 会附带当前 workspace 下最近 TaskRun 摘要；仍不新增独立 TaskRun GET。Playwright smoke 覆盖 enqueue 后 validating/queued 中间态、显式推进 fake validation 后 uploaded/succeeded、process 入队、跨 workspace 读/处理/取消 404 以及取消终态。独立最终复审无 Critical/Important/Minor，完整证据见 [T011 Task 7 报告](../../.superpowers/sdd/t011-task-7-report.md)。全仓与核心模块覆盖率仍未达到 AGENTS.md 门槛，真实 MinIO/PostgreSQL/Redis 联调未执行，因此不将整体 T011 DoD 声明为完成；真实 MinIO smoke 仅在配置 `MINIO_TEST_*` 后运行。
 
 ## 阶段 3：内容生成与导出
 

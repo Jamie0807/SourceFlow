@@ -18,6 +18,20 @@ export interface StoredObject {
   readonly etag?: string;
 }
 
+export type PresignedPutResult = Readonly<{
+  url: string;
+  headers: Readonly<Record<string, string>>;
+  expiresAt: Date;
+}>;
+
+export type StorageObjectMetadata = Readonly<{
+  contentLength?: number;
+  contentType?: string;
+  checksumSha256?: string;
+}>;
+
+export const STORAGE_PORT = Symbol('StoragePort');
+
 export class StorageNotFoundError extends Error {
   constructor(reference: StorageObjectReference) {
     super(
@@ -38,6 +52,15 @@ export interface StoragePort {
   putObject(input: StoragePutObjectInput): Promise<void>;
   getObject(input: StorageObjectReference): Promise<StoredObject>;
   deleteObject(input: StorageObjectReference): Promise<void>;
+  createPresignedPut(
+    input: StorageObjectReference & {
+      contentType: string;
+      contentLength: number;
+      checksumSha256: string;
+      expiresInSeconds: number;
+    },
+  ): Promise<PresignedPutResult>;
+  headObject(input: StorageObjectReference): Promise<StorageObjectMetadata>;
 }
 
 export function buildSourceObjectKey(input: StorageObjectReference): string {

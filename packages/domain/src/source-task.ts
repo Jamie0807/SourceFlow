@@ -1,4 +1,8 @@
-export const SOURCE_TASK_TYPES = ['source.transcribe', 'source.analyze'] as const;
+export const SOURCE_TASK_TYPES = [
+  'source.transcribe',
+  'source.analyze',
+  'source.validate',
+] as const;
 export type SourceTaskType = (typeof SOURCE_TASK_TYPES)[number];
 
 export type JsonPrimitive = string | number | boolean | null;

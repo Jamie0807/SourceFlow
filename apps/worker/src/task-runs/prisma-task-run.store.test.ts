@@ -176,6 +176,100 @@ function queuedRow(overrides: Partial<FakeRow> = {}): FakeRow {
 }
 
 describe('PrismaTaskRunStore', () => {
+  it('commits TaskRun and Source transitions in one workspace-scoped transaction', async () => {
+    const tx = {
+      taskRun: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      source: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    };
+    const transaction = vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx));
+    const prisma = { ...tx, $transaction: transaction } as unknown as PrismaTaskRunClient;
+    const store = new PrismaTaskRunStore(prisma);
+
+    await expect(
+      store.transitionWithSource({
+        workspaceId: 'workspace-a',
+        taskRunId: 'task-a',
+        sourceId: 'source-a',
+        expectedSourceStatus: 'processing',
+        sourceStatus: 'succeeded',
+        taskRunStatus: 'succeeded',
+        result,
+      }),
+    ).resolves.toBe(true);
+
+    expect(transaction).toHaveBeenCalledOnce();
+    expect(tx.taskRun.updateMany).toHaveBeenCalledWith({
+      where: { id: 'task-a', workspaceId: 'workspace-a', status: 'processing' },
+      data: {
+        status: 'succeeded',
+        result,
+        errorCode: null,
+        errorMessage: null,
+      },
+    });
+    expect(tx.source.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'source-a',
+        workspaceId: 'workspace-a',
+        status: 'processing',
+        deletedAt: null,
+      },
+      data: { status: 'succeeded' },
+    });
+  });
+
+  it('reports a CAS miss if either side cannot transition', async () => {
+    const taskConflict = {
+      taskRun: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      source: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    };
+    const taskStore = new PrismaTaskRunStore({
+      ...taskConflict,
+      $transaction: vi.fn(async (callback) => callback(taskConflict)),
+    } as unknown as PrismaTaskRunClient);
+    await expect(
+      taskStore.transitionWithSource({
+        workspaceId: 'workspace-a',
+        taskRunId: 'task-a',
+        sourceId: 'source-a',
+        expectedSourceStatus: 'processing',
+        sourceStatus: 'succeeded',
+        taskRunStatus: 'succeeded',
+        result,
+      }),
+    ).resolves.toBe(false);
+    expect(taskConflict.source.updateMany).not.toHaveBeenCalled();
+
+    const sourceConflict = {
+      taskRun: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      source: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    };
+    let rolledBack = false;
+    const sourceStore = new PrismaTaskRunStore({
+      ...sourceConflict,
+      $transaction: vi.fn(async (callback) => {
+        try {
+          return await callback(sourceConflict);
+        } catch (error) {
+          rolledBack = true;
+          throw error;
+        }
+      }),
+    } as unknown as PrismaTaskRunClient);
+    await expect(
+      sourceStore.transitionWithSource({
+        workspaceId: 'workspace-a',
+        taskRunId: 'task-a',
+        sourceId: 'source-a',
+        expectedSourceStatus: 'processing',
+        sourceStatus: 'succeeded',
+        taskRunStatus: 'succeeded',
+        result,
+      }),
+    ).resolves.toBe(false);
+    expect(rolledBack).toBe(true);
+  });
+
   it('creates one task per workspace and idempotency key', async () => {
     const { store } = createStore();
     const input = {

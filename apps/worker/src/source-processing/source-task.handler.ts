@@ -1,5 +1,6 @@
 import {
   SOURCE_TASK_TYPES,
+  createSourceTaskResult,
   createSourceTaskMessage,
   type SourceTaskJobContext,
   type SourceTaskMessage,
@@ -16,6 +17,7 @@ import {
   type SourceProcessor,
   type SourceRecord,
 } from './source-processor.js';
+import type { SourceMediaValidator } from './source-media-validator.js';
 
 const SAFE_FAILURE_MESSAGES: Record<TaskFailureCode, string> = {
   SOURCE_NOT_FOUND: 'Source 不存在',
@@ -36,6 +38,7 @@ export class SourceTaskHandler {
     private readonly taskRuns: TaskRunStore,
     private readonly sources: SourceLookup,
     private readonly processor: SourceProcessor,
+    private readonly validator?: Pick<SourceMediaValidator, 'validate'>,
   ) {}
 
   async handle(
@@ -115,6 +118,73 @@ export class SourceTaskHandler {
       });
     }
 
+    if (canonical.taskType === 'source.validate') {
+      if (!this.validator) {
+        return this.recoverInfrastructureFailure(message, context);
+      }
+      try {
+        const metadata = await this.validator.validate(source);
+        if (metadata.durationSeconds !== null && typeof metadata.durationSeconds !== 'number') {
+          throw {
+            code: 'PROCESSOR_INVALID_INPUT',
+            message: SAFE_FAILURE_MESSAGES.PROCESSOR_INVALID_INPUT,
+            retryable: false,
+          };
+        }
+        const verifiedMetadata = {
+          durationSeconds: metadata.durationSeconds,
+          contentHash: metadata.contentHash,
+          detectedMimeType: metadata.detectedMimeType,
+        };
+        const stillProcessing = await this.taskRuns.findById(
+          canonical.workspaceId,
+          canonical.taskRunId,
+        );
+        if (!stillProcessing || stillProcessing.status !== 'processing') return stillProcessing;
+        const completed = await this.taskRuns.transitionWithSource({
+          workspaceId: canonical.workspaceId,
+          sourceId: canonical.sourceId,
+          taskRunId: canonical.taskRunId,
+          expectedSourceStatus: 'validating',
+          sourceStatus: 'uploaded',
+          taskRunStatus: 'succeeded',
+          result: createSourceTaskMessageResult(canonical.taskType, verifiedMetadata),
+          sourceMetadata: {
+            durationSeconds: verifiedMetadata.durationSeconds,
+            contentHash: verifiedMetadata.contentHash,
+            mimeType: verifiedMetadata.detectedMimeType,
+          },
+        });
+        if (!completed) {
+          const terminalTask = await this.returnTaskIfSourceAlreadyTerminal(message);
+          return terminalTask ?? this.recoverInfrastructureFailure(message, context);
+        }
+        return this.taskRuns.findById(canonical.workspaceId, canonical.taskRunId);
+      } catch (error) {
+        const failure = isInvalidMediaError(error)
+          ? {
+              code: 'PROCESSOR_INVALID_INPUT' as const,
+              message: SAFE_FAILURE_MESSAGES.PROCESSOR_INVALID_INPUT,
+              retryable: false,
+            }
+          : mapProcessorError(error);
+        return this.persistFailure(message, context, failure);
+      }
+    }
+
+    let started: boolean;
+    try {
+      started = await this.sources.transitionStatus(
+        canonical.workspaceId,
+        canonical.sourceId,
+        'queued',
+        'processing',
+      );
+    } catch {
+      return this.recoverInfrastructureFailure(message, context);
+    }
+    if (!started) return this.recoverInfrastructureFailure(message, context);
+
     let result: SourceTaskResult;
     try {
       result = await this.process(canonical.taskType, source);
@@ -132,10 +202,23 @@ export class SourceTaskHandler {
       return beforeCompletion;
     }
 
+    let completed: boolean;
     try {
-      await this.taskRuns.markSucceeded(canonical.workspaceId, canonical.taskRunId, result);
+      completed = await this.taskRuns.transitionWithSource({
+        workspaceId: canonical.workspaceId,
+        sourceId: canonical.sourceId,
+        taskRunId: canonical.taskRunId,
+        expectedSourceStatus: 'processing',
+        sourceStatus: 'succeeded',
+        taskRunStatus: 'succeeded',
+        result,
+      });
     } catch {
       return this.recoverInfrastructureFailure(message, context);
+    }
+    if (!completed) {
+      const terminalTask = await this.returnTaskIfSourceAlreadyTerminal(message);
+      return terminalTask ?? this.recoverInfrastructureFailure(message, context);
     }
 
     try {
@@ -196,7 +279,8 @@ export class SourceTaskHandler {
     if (taskType === 'source.transcribe') {
       return this.processor.transcribe(source);
     }
-    return this.processor.analyze(source);
+    if (taskType === 'source.analyze') return this.processor.analyze(source);
+    throw new Error('Unsupported source task type');
   }
 
   private async persistFailure(
@@ -205,8 +289,22 @@ export class SourceTaskHandler {
     failure: TaskFailure,
   ): Promise<TaskRunRecord | null> {
     if (failure.retryable && shouldRetry(context)) {
+      const retrySourceStatuses =
+        message.taskType === 'source.validate' ? 'validating' : (['processing', 'queued'] as const);
       try {
-        await this.taskRuns.requeue(message.workspaceId, message.taskRunId);
+        const requeued = await this.taskRuns.transitionWithSource({
+          workspaceId: message.workspaceId,
+          sourceId: message.sourceId,
+          taskRunId: message.taskRunId,
+          expectedSourceStatus: retrySourceStatuses,
+          sourceStatus: message.taskType === 'source.validate' ? 'validating' : 'queued',
+          taskRunStatus: 'queued',
+        });
+        if (!requeued) {
+          const terminalTask = await this.returnTaskIfSourceAlreadyTerminal(message);
+          if (terminalTask !== undefined) return terminalTask;
+          return this.recoverInfrastructureFailure(message, context);
+        }
       } catch {
         throw createSafeError(SAFE_FAILURE_MESSAGES.PROCESSOR_TEMPORARY_FAILURE);
       }
@@ -215,7 +313,23 @@ export class SourceTaskHandler {
     }
 
     try {
-      await this.taskRuns.markFailed(message.workspaceId, message.taskRunId, failure);
+      const failed = await this.taskRuns.transitionWithSource({
+        workspaceId: message.workspaceId,
+        sourceId: message.sourceId,
+        taskRunId: message.taskRunId,
+        expectedSourceStatus:
+          message.taskType === 'source.validate' ? 'validating' : ['processing', 'queued'],
+        sourceStatus: 'failed',
+        taskRunStatus: 'failed',
+        failure,
+      });
+      if (!failed) {
+        const terminalTask = await this.returnTaskIfSourceAlreadyTerminal(message);
+        if (terminalTask !== undefined) return terminalTask;
+        const source = await this.sources.findById(message.workspaceId, message.sourceId);
+        if (source !== null) return this.recoverInfrastructureFailure(message, context);
+        await this.taskRuns.markFailed(message.workspaceId, message.taskRunId, failure);
+      }
     } catch {
       return this.recoverInfrastructureFailure(message, context);
     }
@@ -233,7 +347,20 @@ export class SourceTaskHandler {
   ): Promise<TaskRunRecord | null> {
     if (shouldRetry(context)) {
       try {
-        await this.taskRuns.requeue(message.workspaceId, message.taskRunId);
+        const requeued = await this.taskRuns.transitionWithSource({
+          workspaceId: message.workspaceId,
+          sourceId: message.sourceId,
+          taskRunId: message.taskRunId,
+          expectedSourceStatus:
+            message.taskType === 'source.validate' ? 'validating' : ['processing', 'queued'],
+          sourceStatus: message.taskType === 'source.validate' ? 'validating' : 'queued',
+          taskRunStatus: 'queued',
+        });
+        if (!requeued) {
+          const terminalTask = await this.returnTaskIfSourceAlreadyTerminal(message);
+          if (terminalTask !== undefined) return terminalTask;
+          throw createSafeError(SAFE_FAILURE_MESSAGES.PROCESSOR_TEMPORARY_FAILURE);
+        }
       } catch {
         throw createSafeError(SAFE_FAILURE_MESSAGES.PROCESSOR_TEMPORARY_FAILURE);
       }
@@ -242,11 +369,28 @@ export class SourceTaskHandler {
     }
 
     try {
-      await this.taskRuns.markInfrastructureFailed(
-        message.workspaceId,
-        message.taskRunId,
-        INFRASTRUCTURE_FAILURE,
-      );
+      const failed = await this.taskRuns.transitionWithSource({
+        workspaceId: message.workspaceId,
+        sourceId: message.sourceId,
+        taskRunId: message.taskRunId,
+        expectedSourceStatus:
+          message.taskType === 'source.validate' ? 'validating' : ['processing', 'queued'],
+        sourceStatus: 'failed',
+        taskRunStatus: 'failed',
+        failure: INFRASTRUCTURE_FAILURE,
+      });
+      if (!failed) {
+        const terminalTask = await this.returnTaskIfSourceAlreadyTerminal(message);
+        if (terminalTask !== undefined) return terminalTask;
+        const source = await this.sources.findById(message.workspaceId, message.sourceId);
+        if (source !== null)
+          throw createSafeError(SAFE_FAILURE_MESSAGES.PROCESSOR_TEMPORARY_FAILURE);
+        await this.taskRuns.markInfrastructureFailed(
+          message.workspaceId,
+          message.taskRunId,
+          INFRASTRUCTURE_FAILURE,
+        );
+      }
     } catch {
       throw createSafeError(SAFE_FAILURE_MESSAGES.PROCESSOR_TEMPORARY_FAILURE);
     }
@@ -257,6 +401,35 @@ export class SourceTaskHandler {
       throw createSafeError(SAFE_FAILURE_MESSAGES.PROCESSOR_TEMPORARY_FAILURE);
     }
   }
+
+  private async returnTaskIfSourceAlreadyTerminal(
+    message: SourceTaskMessage,
+  ): Promise<TaskRunRecord | null | undefined> {
+    const source = await this.sources.findById(message.workspaceId, message.sourceId);
+    if (!source || (source.status !== 'cancelled' && source.status !== 'succeeded')) {
+      return undefined;
+    }
+    return this.taskRuns.findById(message.workspaceId, message.taskRunId);
+  }
+}
+
+function isInvalidMediaError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'SOURCE_MEDIA_INVALID'
+  );
+}
+
+function createSourceTaskMessageResult(
+  taskType: SourceTaskType,
+  metadata: { durationSeconds: number | null; contentHash: string; detectedMimeType: string },
+): SourceTaskResult {
+  return createSourceTaskResult({
+    taskType,
+    output: { ...metadata },
+  });
 }
 
 function parseCanonicalMessage(payload: Record<string, unknown>): SourceTaskMessage | null {

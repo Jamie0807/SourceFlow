@@ -1,4 +1,5 @@
 import type {
+  SourceStatus,
   SourceTaskMessage,
   SourceTaskResult,
   SourceTaskType,
@@ -36,6 +37,21 @@ export interface TaskRunStore {
     taskRunId: string,
     failure: TaskFailure,
   ): Promise<void>;
+  transitionWithSource(input: {
+    workspaceId: string;
+    sourceId: string;
+    taskRunId: string;
+    expectedSourceStatus: SourceStatus | readonly SourceStatus[];
+    sourceStatus: SourceStatus;
+    taskRunStatus: 'queued' | 'succeeded' | 'failed';
+    result?: SourceTaskResult;
+    failure?: TaskFailure;
+    sourceMetadata?: Readonly<{
+      durationSeconds: number | null;
+      contentHash: string;
+      mimeType: string;
+    }>;
+  }): Promise<boolean>;
   cancel(workspaceId: string, taskRunId: string): Promise<TaskRunRecord | null>;
   findById(workspaceId: string, taskRunId: string): Promise<TaskRunRecord | null>;
 }

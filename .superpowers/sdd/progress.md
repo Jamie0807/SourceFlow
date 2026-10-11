@@ -1,3 +1,32 @@
+# T011 Content Source API 执行进度
+
+- [x] T011 设计确认：预签名 PUT、异步 source.validate、服务端格式/时长校验、TXT 分析/媒体转写单阶段处理。
+- [x] 创建 `feat/t011-source-api` 隔离 worktree；基线单测 420 passed、10 skipped。
+- [x] 编写 T011 设计稿、实现计划并更新 Spec Kit task traceability。
+- [x] Task 1：Source validating 状态、任务类型与向后兼容迁移；RED/GREEN、db:validate/domain build 通过，Task review Spec ✅ / Quality Approved。
+- Review note (Minor)：后续最终复核清单记录 `source.validate` 任务类型自身未单独断言 workspace-scoped jobId；共用编码函数已有通用隔离覆盖，本项不阻塞。
+- [x] Task 2：Storage 预签名 PUT 与 HeadObject checksum；RED/GREEN Storage 42/42，聚焦质量检查通过，独立复审 Ready。
+- Review note (Minor)：SDK 对 `content-type` 的预签名策略会排除该头；checksum header 已签名，且 upload-complete/Worker 必须把声明 MIME 当作不可信并验证真实格式。当前未配置 `MINIO_TEST_*`，真实 MinIO PUT/HEAD smoke 未运行。
+- Review note (Minor)：TTL 输入只检查正有限整数并截断到 900 秒；超过 JS 安全整数范围的 TTL 仍截断为 900，不会延长 URL，有边界严谨性差异但不阻塞。
+- [x] Task 3：Source API、repository、权限与租户隔离；最终回归 103 passed、9 DB integration skipped，独立复审 Ready。
+- Review note (Minor)：取消成功响应使用旧记录的 `updatedAt`；不影响状态更新，后续可重读或由 Repository 返回最新记录。
+- Review note (Minor)：MinIO bucket 需部署/本地环境预先创建；Task 3 fail-closed 校验配置，Task 7 需明确 bucket 初始化/运维说明。MinIO live smoke 未执行。
+- [x] Task 4：API BullMQ publisher、队列幂等和业务 process；首轮独立审查发现并修复验证任务终态阻断后续业务取消，以及过宽 `audio/*` 派发；修复复审 Ready。
+- Task 4 新鲜回归：API + domain 相关测试 246 passed、9 PostgreSQL integration skipped；根 TypeScript 检查通过。此前 Task 4 API build、ESLint、Prettier、CSpell、Compose 和 diff 检查通过；修复只增加测试/窄化判断，后续全局门禁在 Task 7 重跑。
+- [x] Task 5：Worker 对象读取与媒体/文本 validator；workspace-scoped MinIO Reader、流式 hash/size/MIME/UTF-8 校验、MP3/WAV duration 与 MP4 video timeline 校验。
+- Task 5 RED/GREEN：回归先复现并修复 MP4 parser fixture 零 box header、fragmented MP4 音轨短路、短头部/长尾 `stts`、长 `ctts` composition range 和长 `elst` edit list；最终 validator 26/26 通过。详情见 `.superpowers/sdd/t011-task-5-report.md`。
+- Task 5 验证：Worker 全量 197 passed、1 Redis integration skipped；根 `typecheck`、`build:worker`、lint、format、spellcheck（131 文件、0 issue）、`git diff --check` 通过。未配置 `MINIO_TEST_*`，真实 MinIO smoke 未执行。
+- Task 5 复审：独立只读复审 Ready（实现范围）；普通非 fragmented MP4 读取 raw `stts`、`ctts`、`elst`，无法验证时长的 fragmented MP4 fail closed。
+- [x] Task 6：Worker Source/TaskRun 状态、取消与 runtime 装配；状态更新使用 workspace + 预期 status CAS，媒体读取临时故障可重试，Source CAS 能力为必需接口。详情见 `.superpowers/sdd/t011-task-6-report.md`。
+- Task 6 验证：Worker 211 passed、1 Redis integration skipped；根 typecheck、build:worker、lint、format、spellcheck（131 文件、0 issue）、git diff --check 通过。独立复审确认此前的存储错误分类、状态同步与可选 CAS 接口问题已修复；真实 MinIO smoke 未配置。
+- [x] Task 7：集成测试、文档、全局质量门禁和最终分支审查；实现/审查报告见 `.superpowers/sdd/t011-task-7-report.md`。T011 全仓/核心模块覆盖率门槛仍未满足，因此不将整体 T011 DoD 标记为完成。
+- Task 7 最终门禁：`corepack pnpm verify:push` 新鲜退出 0；lint、format、spellcheck、typecheck、unit、component、Playwright @smoke、Web/API/Worker build 与 Compose config 均通过。T011 smoke 在 web-chromium、h5-mobile、pad-landscape 三个项目各通过 1 次。
+- Task 7 覆盖率/环境缺口：全仓 statements/branches/functions/lines 为 74.06%/84.10%/85.67%/74.06%，低于 85%/80%/85%/85% 门槛；API sources 目录为 86.73%/79.74%/92.72%/86.73%，Worker source-processing 为 87.52%/78.16%/93.33%/87.52%，均低于核心模块 95% 行/90% 分支门槛。未运行真实 PostgreSQL migration、MinIO 和 Redis/BullMQ 集成；PostgreSQL 认证集成仍按配置跳过。Task 7 验收时尚未提交、push 或合并；后续状态以 Git 记录为准。
+
+执行约束：采用 subagent-driven，任务按依赖顺序串行；项目 AGENTS.md 禁止未授权提交，因此实现与复审只使用当前 Worktree 的 staged/unstaged diff，不自动 commit/push/merge。
+
+---
+
 # T006 执行进度
 
 - [x] 创建 `feat/content-batch-auth` 隔离 worktree。

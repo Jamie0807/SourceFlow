@@ -16,6 +16,7 @@ enum UserRole {
 enum SourceStatus {
   created
   uploading
+  validating
   uploaded
   queued
   processing

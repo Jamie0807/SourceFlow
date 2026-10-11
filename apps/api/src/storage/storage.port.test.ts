@@ -26,6 +26,12 @@ describe('storage port', () => {
       async deleteObject() {
         return undefined;
       },
+      async createPresignedPut() {
+        return { url: 'https://storage.example/upload', headers: {}, expiresAt: new Date() };
+      },
+      async headObject() {
+        return {};
+      },
     };
 
     await ossLikeStorage.putObject({
@@ -63,6 +69,12 @@ describe('storage port', () => {
       },
       async deleteObject() {
         return undefined;
+      },
+      async createPresignedPut() {
+        return { url: 'https://storage.example/upload', headers: {}, expiresAt: new Date() };
+      },
+      async headObject(reference) {
+        throw new StorageNotFoundError(reference);
       },
     };
 

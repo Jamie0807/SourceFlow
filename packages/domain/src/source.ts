@@ -3,6 +3,7 @@ import { canTransition, transitionFrom, type TransitionTable } from './state-tra
 export const SOURCE_STATUSES = [
   'created',
   'uploading',
+  'validating',
   'uploaded',
   'queued',
   'processing',
@@ -16,6 +17,7 @@ export type SourceStatus = (typeof SOURCE_STATUSES)[number];
 export const SOURCE_EVENTS = [
   'start_upload',
   'complete_upload',
+  'complete_validation',
   'queue',
   'start_processing',
   'succeed',
@@ -28,7 +30,8 @@ export type SourceEvent = (typeof SOURCE_EVENTS)[number];
 
 export const SOURCE_TRANSITIONS: TransitionTable<SourceStatus, SourceEvent> = {
   created: { start_upload: 'uploading', cancel: 'cancelled' },
-  uploading: { complete_upload: 'uploaded', cancel: 'cancelled' },
+  uploading: { complete_upload: 'validating', cancel: 'cancelled' },
+  validating: { complete_validation: 'uploaded', fail: 'failed', cancel: 'cancelled' },
   uploaded: { queue: 'queued', cancel: 'cancelled' },
   queued: { start_processing: 'processing', cancel: 'cancelled' },
   processing: {

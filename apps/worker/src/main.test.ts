@@ -15,6 +15,11 @@ describe('parseWorkerConfig', () => {
   const requiredEnvironment = {
     DATABASE_URL: 'postgresql://local.test/sourceflow',
     REDIS_URL: 'redis://localhost:6379',
+    MINIO_ENDPOINT: 'http://localhost:9000',
+    MINIO_BUCKET: 'sourceflow',
+    MINIO_REGION: 'us-east-1',
+    MINIO_ROOT_USER: 'local-user',
+    MINIO_ROOT_PASSWORD: 'local-password',
   };
 
   it('requires both connection URLs with stable configuration errors', () => {
@@ -31,6 +36,15 @@ describe('parseWorkerConfig', () => {
     expect(parseWorkerConfig({ ...requiredEnvironment, WORKER_CONCURRENCY: '4' })).toMatchObject({
       concurrency: 4,
     });
+  });
+
+  it('requires MinIO settings without echoing provided credentials', () => {
+    expect(() => parseWorkerConfig({ ...requiredEnvironment, MINIO_ROOT_PASSWORD: '' })).toThrow(
+      'Worker configuration error: MINIO_ROOT_PASSWORD is required',
+    );
+    expect(() =>
+      parseWorkerConfig({ ...requiredEnvironment, MINIO_ROOT_PASSWORD: 'sensitive-value' }),
+    ).not.toThrow();
   });
 
   it.each(['0', '-1', '1.5', 'not-a-number', '7-sensitive-suffix'])(
@@ -167,6 +181,8 @@ describe('createWorkerRuntime', () => {
     const createTaskRuns = vi.fn(() => taskRuns);
     const createSourceLookup = vi.fn(() => sourceLookup);
     const createProcessor = vi.fn(() => processor);
+    const validator = { name: 'validator' };
+    const createValidator = vi.fn(() => validator);
     const createSourceTaskHandler = vi.fn(() => sourceTaskHandler);
 
     const runtime = createProductionWorkerRuntime(
@@ -174,6 +190,13 @@ describe('createWorkerRuntime', () => {
         databaseUrl: 'postgresql://local.test/sourceflow',
         redisUrl: 'redis://:password@localhost:6379',
         concurrency: 4,
+        minio: {
+          endpoint: 'http://localhost:9000',
+          bucket: 'sourceflow',
+          region: 'us-east-1',
+          accessKeyId: 'local-user',
+          secretAccessKey: 'local-password',
+        },
       },
       {
         createQueue,
@@ -181,6 +204,7 @@ describe('createWorkerRuntime', () => {
         createTaskRuns,
         createSourceLookup,
         createProcessor,
+        createValidator,
         createSourceTaskHandler,
       },
     );
@@ -194,7 +218,23 @@ describe('createWorkerRuntime', () => {
     });
     expect(createTaskRuns).toHaveBeenCalledWith(prisma);
     expect(createSourceLookup).toHaveBeenCalledWith(prisma);
-    expect(createSourceTaskHandler).toHaveBeenCalledWith(taskRuns, sourceLookup, processor);
+    expect(createValidator).toHaveBeenCalledWith(
+      expect.objectContaining({
+        minio: {
+          endpoint: 'http://localhost:9000',
+          bucket: 'sourceflow',
+          region: 'us-east-1',
+          accessKeyId: 'local-user',
+          secretAccessKey: 'local-password',
+        },
+      }),
+    );
+    expect(createSourceTaskHandler).toHaveBeenCalledWith(
+      taskRuns,
+      sourceLookup,
+      processor,
+      validator,
+    );
   });
 
   it('registers SIGTERM and SIGINT once and routes both through runtime close', async () => {

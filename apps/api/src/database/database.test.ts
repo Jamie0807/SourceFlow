@@ -15,6 +15,10 @@ const workspaceInvitationMigrationPath = resolve(
   worktreeRoot,
   'prisma/migrations/20260928_add_workspace_invitations/migration.sql',
 );
+const sourceValidatingMigrationPath = resolve(
+  worktreeRoot,
+  'prisma/migrations/20261008170000_add_source_validating/migration.sql',
+);
 const seedPath = resolve(worktreeRoot, 'prisma/seed.ts');
 const readinessPath = resolve(import.meta.dirname, './database-health.ts');
 
@@ -198,6 +202,7 @@ describe('Prisma database contract', () => {
 
     const schema = readFileSync(schemaPath, 'utf8');
     expect(schema).toMatch(/enum SourceStatus \{[\s\S]*created[\s\S]*cancelled[\s\S]*\}/);
+    expect(schema).toMatch(/enum SourceStatus \{[\s\S]*validating[\s\S]*\}/);
     expect(schema).toMatch(
       /enum ContentBatchStatus \{[\s\S]*generation_failed[\s\S]*export_failed[\s\S]*\}/,
     );
@@ -205,6 +210,15 @@ describe('Prisma database contract', () => {
     expect(schema).toMatch(/enum ReviewStatus \{[\s\S]*needs_review[\s\S]*approved[\s\S]*\}/);
     expect(schema).toMatch(/enum ExportJobStatus \{[\s\S]*processing[\s\S]*cancelled[\s\S]*\}/);
     expect(schema).toMatch(/enum TaskRunStatus \{[\s\S]*processing[\s\S]*cancelled[\s\S]*\}/);
+  });
+
+  it('adds the validating source status without rewriting existing migrations', () => {
+    expect(existsSync(sourceValidatingMigrationPath)).toBe(true);
+    if (!existsSync(sourceValidatingMigrationPath)) return;
+
+    expect(readFileSync(sourceValidatingMigrationPath, 'utf8').trim()).toBe(
+      'ALTER TYPE "SourceStatus" ADD VALUE \'validating\';',
+    );
   });
 });
 

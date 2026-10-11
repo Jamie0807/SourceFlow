@@ -3,6 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 
 import { isAuthError, isWorkspaceError, WorkspaceError } from '../auth/auth.errors.js';
+import { isSourceError } from '../sources/sources.errors.js';
 
 type ErrorResponse = Readonly<{
   code: string;
@@ -24,6 +25,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
 }
 
 function getStatus(exception: unknown): number {
+  if (isSourceError(exception)) return exception.status;
   if (isWorkspaceError(exception)) return exception.status;
   if (isAuthError(exception)) return exception.status;
   if (exception instanceof HttpException) return exception.getStatus();
@@ -31,6 +33,14 @@ function getStatus(exception: unknown): number {
 }
 
 function toSafeErrorResponse(exception: unknown, requestId: string): ErrorResponse {
+  if (isSourceError(exception)) {
+    return {
+      code: exception.code,
+      message: exception.message,
+      request_id: requestId,
+      details: null,
+    };
+  }
   if (isWorkspaceError(exception)) {
     return {
       code: exception.code,

@@ -15,10 +15,20 @@ import {
 describe('Source state machine', () => {
   it('moves a source through upload and processing successfully', () => {
     expect(transitionSource('created', 'start_upload')).toBe('uploading');
-    expect(transitionSource('uploading', 'complete_upload')).toBe('uploaded');
+    expect(transitionSource('uploading', 'complete_upload')).toBe('validating');
+    expect(transitionSource('validating', 'complete_validation')).toBe('uploaded');
     expect(transitionSource('uploaded', 'queue')).toBe('queued');
     expect(transitionSource('queued', 'start_processing')).toBe('processing');
     expect(transitionSource('processing', 'succeed')).toBe('succeeded');
+  });
+
+  it('supports validation failure and cancellation without allowing cancelled validation to succeed', () => {
+    expect(transitionSource('validating', 'fail')).toBe('failed');
+    expect(transitionSource('validating', 'cancel')).toBe('cancelled');
+    expect(canTransitionSource('cancelled', 'complete_validation')).toBe(false);
+    expect(() => transitionSource('cancelled', 'complete_validation')).toThrowError(
+      /invalid source transition/i,
+    );
   });
 
   it('rejects invalid and duplicate source transitions', () => {

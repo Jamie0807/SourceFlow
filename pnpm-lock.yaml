@@ -97,6 +97,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1141.0
         version: 3.1141.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: ^3.1147.0
+        version: 3.1147.0
       '@fastify/cookie':
         specifier: ^11.1.2
         version: 11.1.2
@@ -112,9 +115,18 @@ importers:
       '@prisma/client':
         specifier: 6.19.0
         version: 6.19.0(prisma@6.19.0(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3)
+      '@sourceflow/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      bullmq:
+        specifier: ^5.81.5
+        version: 5.81.5
       fastify:
         specifier: ^5.3.0
         version: 5.12.5
+      ioredis:
+        specifier: ^5.11.1
+        version: 5.11.1
       jose:
         specifier: ^6.2.12
         version: 6.2.12
@@ -147,6 +159,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1141.0
+        version: 3.1141.0
       '@prisma/client':
         specifier: 6.19.0
         version: 6.19.0(prisma@6.19.0(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3)
@@ -159,6 +174,12 @@ importers:
       ioredis:
         specifier: ^5.11.1
         version: 5.11.1
+      mp4box:
+        specifier: ^2.4.1
+        version: 2.4.1
+      music-metadata:
+        specifier: ^12.0.0
+        version: 12.0.0
     devDependencies:
       tsx:
         specifier: ^4.19.4
@@ -284,6 +305,13 @@ packages:
     resolution:
       {
         integrity: sha512-oRxtBcka/JGHGs9l9p9IVajGoTP8vTPmoAzdHGy4Qcy9P5vPnDf6nhIeM/COQNY9k/OahImTRaLkHftoXvfcmQ==,
+      }
+    engines: { node: '>=20.0.0' }
+
+  '@aws-sdk/s3-request-presigner@3.1147.0':
+    resolution:
+      {
+        integrity: sha512-9za8GOn8IRFz+foPbLfjFFfqDV87mLBhNbUg+8YgqaSIuvzx+o6bWgOAETqPev5wul6DAImTQSCgt8mBsKtGUg==,
       }
     engines: { node: '>=20.0.0' }
 
@@ -2831,6 +2859,13 @@ packages:
       }
     engines: { node: ^14.18.0 || >=16.10.0 }
 
+  content-type@3.1.1:
+    resolution:
+      {
+        integrity: sha512-GW4qUsfFo59d0HbUibDlWv5wPz+vAAcaTWbKIuKCf0JkC7wWkSyf8f13IpXn5JkeMlB2P8iTSSIjwXljorg2vA==,
+      }
+    engines: { node: '>=22' }
+
   conventional-changelog-angular@7.0.0:
     resolution:
       {
@@ -3531,6 +3566,13 @@ packages:
         integrity: sha512-Ievi/yy8DS3ygGvT47PjSfdFoX+2isQueoYP1cntFW1JLYAuS4GD7NUPGg4zv2iZfV52uDyk5w5Z0TdpRS6Q1g==,
       }
     engines: { node: '>=20' }
+
+  file-type@22.1.1:
+    resolution:
+      {
+        integrity: sha512-sEB0oStmeLGtpmSAD88RDNuLsvhv4iC3u0lE25CUvfCULvj49xoQ3l3K525Vn+ZzsZ6DOLajQCV6RmhwwhqiJg==,
+      }
+    engines: { node: '>=22' }
 
   fill-range@7.1.1:
     resolution:
@@ -4361,6 +4403,13 @@ packages:
       }
     engines: { node: '>=10' }
 
+  media-typer@2.0.0:
+    resolution:
+      {
+        integrity: sha512-kOy3OxT2HH39N70UnKgu4NWDZjLOz8W/mfyvniHjRH/DrL3f2pOfvWQ4p60offbbtDAnXWp0v9LfMIqMec269Q==,
+      }
+    engines: { node: '>=18' }
+
   meow@12.1.1:
     resolution:
       {
@@ -4435,6 +4484,13 @@ packages:
       }
     engines: { node: '>=16 || 14 >=14.17' }
 
+  mp4box@2.4.1:
+    resolution:
+      {
+        integrity: sha512-0HGX7nXoDIX6FKLVl4a3wtYjBlwqsN3xuQC3GXzNtKp98FXUOhDSq623azsz8DG5ptd9ZXcXodDkgbdMZOjWvw==,
+      }
+    engines: { node: '>=20.8.1' }
+
   ms@2.1.3:
     resolution:
       {
@@ -4453,6 +4509,13 @@ packages:
       {
         integrity: sha512-cef05H/dSYpLpqp3sj/qyZh5vhUYCalnaLO7j1yOmpsR0y/XwLVtK7r5gn+U/F7CTEfMowcGhlUQJDLcLf7jcA==,
       }
+
+  music-metadata@12.0.0:
+    resolution:
+      {
+        integrity: sha512-+yVgI1WNa0S9aAZch1WMAsmBrP7+5YGmhgPaRHiqF5KmuRJ7vuynn7OmKZRu3pr2W83N3bE+6Bw/pn8r4hf5sQ==,
+      }
+    engines: { node: '>=22' }
 
   mute-stream@0.0.8:
     resolution:
@@ -5465,6 +5528,13 @@ packages:
       }
     engines: { node: '>=18' }
 
+  uint8array-extras@1.6.0:
+    resolution:
+      {
+        integrity: sha512-8iAasVS4wUx0gPLjH8Xtz2PeDzTSiy8QiLGu2DT3X5GU+egFEQhpnbtkehbAwjvDcxIERmCYcysiODFmE3Ud0Q==,
+      }
+    engines: { node: '>=18' }
+
   undici-types@7.18.2:
     resolution:
       {
@@ -5664,6 +5734,12 @@ packages:
       }
     engines: { node: '>=8' }
     hasBin: true
+
+  win-guid@0.2.1:
+    resolution:
+      {
+        integrity: sha512-gEIQU4mkgl2OPeoNrWflcJFJ3Ae2BPd4eCsHHA/XikslkIVms/nHhvnvzIZV7VLmBvtFlDOzLt9rrZT+n6D67A==,
+      }
 
   word-wrap@1.2.5:
     resolution:
@@ -5940,6 +6016,15 @@ snapshots:
       '@smithy/core': 3.35.0
       '@smithy/fetch-http-handler': 5.8.0
       '@smithy/node-http-handler': 4.12.1
+      '@smithy/types': 4.19.0
+      tslib: 2.8.1
+
+  '@aws-sdk/s3-request-presigner@3.1147.0':
+    dependencies:
+      '@aws-sdk/core': 3.978.1
+      '@aws-sdk/signature-v4-multi-region': 3.996.47
+      '@aws-sdk/types': 3.974.6
+      '@smithy/core': 3.35.0
       '@smithy/types': 4.19.0
       tslib: 2.8.1
 
@@ -7435,6 +7520,8 @@ snapshots:
 
   consola@3.4.2: {}
 
+  content-type@3.1.1: {}
+
   conventional-changelog-angular@7.0.0:
     dependencies:
       compare-func: 2.0.0
@@ -7902,6 +7989,15 @@ snapshots:
       flat-cache: 4.0.1
 
   file-type@21.3.4:
+    dependencies:
+      '@tokenizer/inflate': 0.4.1
+      strtok3: 10.3.5
+      token-types: 6.1.2
+      uint8array-extras: 1.5.0
+    transitivePeerDependencies:
+      - supports-color
+
+  file-type@22.1.1:
     dependencies:
       '@tokenizer/inflate': 0.4.1
       strtok3: 10.3.5
@@ -8388,6 +8484,8 @@ snapshots:
     dependencies:
       semver: 7.8.5
 
+  media-typer@2.0.0: {}
+
   meow@12.1.1: {}
 
   merge@2.1.1: {}
@@ -8419,6 +8517,8 @@ snapshots:
 
   minipass@7.1.3: {}
 
+  mp4box@2.4.1: {}
+
   ms@2.1.3: {}
 
   msgpackr-extract@3.0.4:
@@ -8436,6 +8536,21 @@ snapshots:
   msgpackr@2.0.5:
     optionalDependencies:
       msgpackr-extract: 3.0.4
+
+  music-metadata@12.0.0:
+    dependencies:
+      '@borewit/text-codec': 0.2.2
+      '@tokenizer/token': 0.3.0
+      content-type: 3.1.1
+      debug: 4.4.3
+      file-type: 22.1.1
+      media-typer: 2.0.0
+      strtok3: 10.3.5
+      token-types: 6.1.2
+      uint8array-extras: 1.6.0
+      win-guid: 0.2.1
+    transitivePeerDependencies:
+      - supports-color
 
   mute-stream@0.0.8: {}
 
@@ -8961,6 +9076,8 @@ snapshots:
 
   uint8array-extras@1.5.0: {}
 
+  uint8array-extras@1.6.0: {}
+
   undici-types@7.18.2: {}
 
   unicorn-magic@0.1.0: {}
@@ -9094,6 +9211,8 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
+
+  win-guid@0.2.1: {}
 
   word-wrap@1.2.5: {}
 

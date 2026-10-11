@@ -5,6 +5,7 @@ import {
   type SourceTaskType,
   type TaskFailure,
   type TaskFailureCode,
+  type SourceStatus,
 } from '@sourceflow/domain';
 
 export type SourceRecord = Readonly<{
@@ -13,10 +14,24 @@ export type SourceRecord = Readonly<{
   status: string;
   storageKey: string;
   contentHash: string;
+  mimeType: string;
+  sizeBytes: number;
+  durationSeconds?: number | null;
 }>;
 
 export interface SourceLookup {
   findById(workspaceId: string, sourceId: string): Promise<SourceRecord | null>;
+  transitionStatus(
+    workspaceId: string,
+    sourceId: string,
+    expectedStatus: SourceStatus,
+    status: SourceStatus,
+  ): Promise<boolean>;
+  completeValidation(
+    workspaceId: string,
+    sourceId: string,
+    metadata: { durationSeconds: number | null; contentHash: string; mimeType: string },
+  ): Promise<boolean>;
 }
 
 export interface SourceProcessor {

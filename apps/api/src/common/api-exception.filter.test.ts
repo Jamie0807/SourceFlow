@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ArgumentsHost } from '@nestjs/common';
 
 import { WorkspaceError } from '../auth/auth.errors.js';
+import { SourceError } from '../sources/sources.errors.js';
 import { ApiExceptionFilter } from './api-exception.filter.js';
 
 describe('ApiExceptionFilter', () => {
@@ -36,5 +37,36 @@ describe('ApiExceptionFilter', () => {
       },
     ]);
     expect(JSON.stringify(sent)).not.toContain('caller-controlled');
+  });
+
+  it('maps Source API conflicts to the shared safe error envelope', () => {
+    const sent: unknown[] = [];
+    const reply = {
+      status(statusCode: number) {
+        expect(statusCode).toBe(409);
+        return this;
+      },
+      send(payload: unknown) {
+        sent.push(payload);
+        return this;
+      },
+    };
+    const host = {
+      switchToHttp: () => ({
+        getResponse: () => reply,
+        getRequest: () => ({ id: 'source-request' }),
+      }),
+    } as unknown as ArgumentsHost;
+
+    new ApiExceptionFilter().catch(new SourceError('SOURCE_DUPLICATE'), host);
+
+    expect(sent).toEqual([
+      {
+        code: 'SOURCE_DUPLICATE',
+        message: '该文件已存在于当前工作区',
+        request_id: 'source-request',
+        details: null,
+      },
+    ]);
   });
 });

@@ -23,9 +23,11 @@ describe('Source task contract', () => {
   it('supports both source task types and builds tenant-isolated job ids', () => {
     const transcribeMessage = messageFor('source.transcribe');
     const analyzeMessage = messageFor('source.analyze');
+    const validateMessage = messageFor('source.validate');
     const transcribeJobId = sourceTaskJobId(transcribeMessage);
 
-    expect(SOURCE_TASK_TYPES).toEqual(['source.transcribe', 'source.analyze']);
+    expect(SOURCE_TASK_TYPES).toEqual(['source.transcribe', 'source.analyze', 'source.validate']);
+    expect(validateMessage.taskType).toBe('source.validate');
     expect(transcribeJobId).toMatch(/^sf1_[0-9a-f]*_[0-9a-f]*$/);
     expect(transcribeJobId).not.toContain(':');
     expect(transcribeJobId).not.toMatch(/^\d+$/);

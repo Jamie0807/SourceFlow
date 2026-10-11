@@ -5,6 +5,8 @@ import type { SourceTaskJobContext, SourceTaskMessage, SourceTaskQueue } from '@
 
 import { BullMQSourceTaskQueue } from './queue/bullmq-source-task.queue.js';
 import { PrismaSourceLookup } from './source-processing/prisma-source.lookup.js';
+import { MinioSourceMediaReader } from './source-processing/minio-source-media-reader.js';
+import { SourceMediaValidator } from './source-processing/source-media-validator.js';
 import { MockSourceProcessor } from './source-processing/source-processor.js';
 import { SourceTaskHandler } from './source-processing/source-task.handler.js';
 import { PrismaTaskRunStore } from './task-runs/prisma-task-run.store.js';
@@ -24,6 +26,13 @@ export type WorkerConfig = Readonly<{
   databaseUrl: string;
   redisUrl: string;
   concurrency: number;
+  minio: {
+    endpoint: string;
+    bucket: string;
+    region: string;
+    accessKeyId: string;
+    secretAccessKey: string;
+  };
 }>;
 
 export function parseWorkerConfig(
@@ -40,18 +49,53 @@ export function parseWorkerConfig(
     throw new Error('Worker configuration error: DATABASE_URL is required');
   }
 
+  const minio = {
+    endpoint: environment.MINIO_ENDPOINT,
+    bucket: environment.MINIO_BUCKET,
+    region: environment.MINIO_REGION,
+    accessKeyId: environment.MINIO_ROOT_USER,
+    secretAccessKey: environment.MINIO_ROOT_PASSWORD,
+  };
+  const missingMinioSetting = Object.entries(minio).find(([, value]) => !value)?.[0];
+  if (missingMinioSetting) {
+    throw new Error(
+      `Worker configuration error: ${toMinioEnvironmentName(missingMinioSetting)} is required`,
+    );
+  }
+
   const rawConcurrency = environment.WORKER_CONCURRENCY;
   if (rawConcurrency === undefined) {
-    return { databaseUrl, redisUrl, concurrency: DEFAULT_WORKER_CONCURRENCY };
+    return {
+      databaseUrl,
+      redisUrl,
+      concurrency: DEFAULT_WORKER_CONCURRENCY,
+      minio: minio as WorkerConfig['minio'],
+    };
   }
 
   const concurrency = Number(rawConcurrency);
   if (!Number.isSafeInteger(concurrency) || concurrency <= 0) {
     logger.warn(WORKER_CONCURRENCY_WARNING);
-    return { databaseUrl, redisUrl, concurrency: DEFAULT_WORKER_CONCURRENCY };
+    return {
+      databaseUrl,
+      redisUrl,
+      concurrency: DEFAULT_WORKER_CONCURRENCY,
+      minio: minio as WorkerConfig['minio'],
+    };
   }
 
-  return { databaseUrl, redisUrl, concurrency };
+  return { databaseUrl, redisUrl, concurrency, minio: minio as WorkerConfig['minio'] };
+}
+
+function toMinioEnvironmentName(setting: string): string {
+  const names: Record<string, string> = {
+    endpoint: 'MINIO_ENDPOINT',
+    bucket: 'MINIO_BUCKET',
+    region: 'MINIO_REGION',
+    accessKeyId: 'MINIO_ROOT_USER',
+    secretAccessKey: 'MINIO_ROOT_PASSWORD',
+  };
+  return names[setting] ?? 'MINIO_CONFIGURATION';
 }
 
 export type WorkerPrismaLifecycle = Readonly<{
@@ -150,10 +194,12 @@ export type ProductionWorkerRuntimeDependencies = Readonly<{
   createTaskRuns(prisma: WorkerPrismaLifecycle): unknown;
   createSourceLookup(prisma: WorkerPrismaLifecycle): unknown;
   createProcessor(): unknown;
+  createValidator(config: WorkerConfig): unknown;
   createSourceTaskHandler(
     taskRuns: unknown,
     sourceLookup: unknown,
     processor: unknown,
+    validator: unknown,
   ): WorkerSourceTaskHandler;
 }>;
 
@@ -163,11 +209,14 @@ const productionDependencies: ProductionWorkerRuntimeDependencies = {
   createTaskRuns: (prisma) => new PrismaTaskRunStore(prisma as PrismaClient),
   createSourceLookup: (prisma) => new PrismaSourceLookup(prisma as PrismaClient),
   createProcessor: () => new MockSourceProcessor(),
-  createSourceTaskHandler: (taskRuns, sourceLookup, processor) =>
+  createValidator: (config) =>
+    new SourceMediaValidator(new MinioSourceMediaReader({ ...config.minio, forcePathStyle: true })),
+  createSourceTaskHandler: (taskRuns, sourceLookup, processor, validator) =>
     new SourceTaskHandler(
       taskRuns as PrismaTaskRunStore,
       sourceLookup as PrismaSourceLookup,
       processor as MockSourceProcessor,
+      validator as SourceMediaValidator,
     ),
 };
 
@@ -183,7 +232,13 @@ export function createProductionWorkerRuntime(
   const taskRuns = dependencies.createTaskRuns(prisma);
   const sourceLookup = dependencies.createSourceLookup(prisma);
   const processor = dependencies.createProcessor();
-  const sourceTaskHandler = dependencies.createSourceTaskHandler(taskRuns, sourceLookup, processor);
+  const validator = dependencies.createValidator(config);
+  const sourceTaskHandler = dependencies.createSourceTaskHandler(
+    taskRuns,
+    sourceLookup,
+    processor,
+    validator,
+  );
 
   return createWorkerRuntime({ ...config, dependencies: { queue, prisma, sourceTaskHandler } });
 }

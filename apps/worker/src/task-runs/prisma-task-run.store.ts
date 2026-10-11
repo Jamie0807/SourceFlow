@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
   SOURCE_TASK_TYPES,
+  type SourceStatus,
   type SourceTaskMessage,
   type SourceTaskResult,
   type SourceTaskType,
@@ -10,7 +11,7 @@ import {
 
 import type { TaskRunRecord, TaskRunStatus, TaskRunStore } from './task-run.store.js';
 
-export type PrismaTaskRunClient = Pick<PrismaClient, 'taskRun'>;
+export type PrismaTaskRunClient = Pick<PrismaClient, '$transaction' | 'source' | 'taskRun'>;
 export type PrismaTaskRunRow = Readonly<{
   id: string;
   workspaceId: string;
@@ -33,6 +34,7 @@ const TASK_FAILURE_MESSAGES: Record<TaskFailureCode, string> = {
   PROCESSOR_TEMPORARY_FAILURE: '处理服务暂时不可用',
   PROCESSOR_UNKNOWN_FAILURE: '处理失败',
 };
+const SOURCE_TASK_CAS_MISS = Symbol('SOURCE_TASK_CAS_MISS');
 
 export class PrismaTaskRunStore implements TaskRunStore {
   constructor(private readonly prisma: PrismaTaskRunClient) {}
@@ -156,6 +158,71 @@ export class PrismaTaskRunStore implements TaskRunStore {
     });
   }
 
+  async transitionWithSource(input: {
+    workspaceId: string;
+    sourceId: string;
+    taskRunId: string;
+    expectedSourceStatus: SourceStatus | readonly SourceStatus[];
+    sourceStatus: SourceStatus;
+    taskRunStatus: 'queued' | 'succeeded' | 'failed';
+    result?: SourceTaskResult;
+    failure?: TaskFailure;
+    sourceMetadata?: Readonly<{
+      durationSeconds: number | null;
+      contentHash: string;
+      mimeType: string;
+    }>;
+  }): Promise<boolean> {
+    const taskRunData: Prisma.TaskRunUpdateManyMutationInput =
+      input.taskRunStatus === 'succeeded'
+        ? {
+            status: 'succeeded',
+            result: toPrismaJsonObject(requireTransitionValue(input.result, 'result')),
+            errorCode: null,
+            errorMessage: null,
+          }
+        : input.taskRunStatus === 'failed'
+          ? {
+              status: 'failed',
+              errorCode: requireTransitionValue(input.failure, 'failure').code,
+              errorMessage: TASK_FAILURE_MESSAGES[input.failure!.code],
+            }
+          : { status: 'queued', errorCode: null, errorMessage: null };
+    const expectedSourceStatus =
+      typeof input.expectedSourceStatus === 'string'
+        ? input.expectedSourceStatus
+        : { in: [...input.expectedSourceStatus] };
+    const sourceData: Prisma.SourceUpdateManyMutationInput = {
+      status: input.sourceStatus,
+      ...(input.sourceMetadata === undefined ? {} : input.sourceMetadata),
+    };
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const taskRun = await tx.taskRun.updateMany({
+          where: { id: input.taskRunId, workspaceId: input.workspaceId, status: 'processing' },
+          data: taskRunData,
+        });
+        if (taskRun.count !== 1) throw SOURCE_TASK_CAS_MISS;
+
+        const source = await tx.source.updateMany({
+          where: {
+            id: input.sourceId,
+            workspaceId: input.workspaceId,
+            status: expectedSourceStatus,
+            deletedAt: null,
+          },
+          data: sourceData,
+        });
+        if (source.count !== 1) throw SOURCE_TASK_CAS_MISS;
+      });
+      return true;
+    } catch (error) {
+      if (error === SOURCE_TASK_CAS_MISS) return false;
+      throw error;
+    }
+  }
+
   async cancel(workspaceId: string, taskRunId: string): Promise<TaskRunRecord | null> {
     await this.prisma.taskRun.updateMany({
       where: { id: taskRunId, workspaceId, status: { in: CANCELLABLE_STATUSES } },
@@ -179,6 +246,11 @@ export class PrismaTaskRunStore implements TaskRunStore {
 
 function isUniqueConstraintViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+}
+
+function requireTransitionValue<T>(value: T | undefined, fieldName: string): T {
+  if (value === undefined) throw new Error(`Task transition requires ${fieldName}`);
+  return value;
 }
 
 function assertPayloadMatchesInput(input: {
