@@ -18,7 +18,7 @@
     "test:component": "vitest run --config vitest.component.config.ts",
     "test:integration": "corepack pnpm build:api && tsc -p tsconfig.integration.json --pretty false && playwright test --pass-with-no-tests",
     "build:web": "corepack pnpm --filter @sourceflow/web build",
-    "build:api": "corepack pnpm --filter @sourceflow/api build",
+    "build:api": "corepack pnpm --filter @sourceflow/domain build && corepack pnpm --filter @sourceflow/api build",
     "build:worker": "corepack pnpm --filter @sourceflow/domain build && corepack pnpm --filter @sourceflow/worker build",
     "verify:push": "corepack pnpm lint && corepack pnpm format:check && corepack pnpm spellcheck && corepack pnpm typecheck && corepack pnpm test:unit -- --run && corepack pnpm test:component -- --run && corepack pnpm test:integration -- --grep @smoke && corepack pnpm build:web && corepack pnpm build:api && corepack pnpm build:worker && docker compose --env-file Docker/compose/.env.example -f Docker/compose/docker-compose.yml config",
     "db:generate": "prisma generate --schema prisma/schema.prisma",
